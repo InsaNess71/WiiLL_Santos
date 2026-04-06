@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "Confession": {
+      "title": "Confession",
+      "description": "An anonymous confession posted by a user.",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string", "description": "The confession text." },
+        "category": { "type": "string", "description": "Category of the confession." },
+        "age": { "type": "number", "description": "Optional age of the author." },
+        "gender": { "type": "string", "description": "Optional gender of the author." },
+        "likes": { "type": "number", "description": "Number of likes." },
+        "commentCount": { "type": "number", "description": "Number of comments." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "authorId": { "type": "string", "description": "The UID of the author." }
+      },
+      "required": ["text", "category", "likes", "commentCount", "createdAt", "authorId"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "A comment on a confession.",
+      "type": "object",
+      "properties": {
+        "confessionId": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "authorId": { "type": "string" }
+      },
+      "required": ["confessionId", "text", "createdAt", "authorId"]
+    },
+    "Like": {
+      "title": "Like",
+      "description": "Tracks which user liked which confession to prevent multiple likes.",
+      "type": "object",
+      "properties": {
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["createdAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with nickname for chat.",
+      "type": "object",
+      "properties": {
+        "nickname": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nickname", "createdAt"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "A temporary chat between two users.",
+      "type": "object",
+      "properties": {
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "durationMode": { "type": "string", "enum": ["1h", "24h"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["participants", "expiresAt", "durationMode", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "A message in a temporary chat.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "isSystem": { "type": "boolean" }
+      },
+      "required": ["senderId", "text", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Stores user profiles with nicknames."
+    },
+    "/chats/{chatId}": {
+      "schema": { "$ref": "#/entities/Chat" },
+      "description": "Stores temporary chats."
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Stores messages for a chat."
+    },
+    "/confessions/{confessionId}": {
+      "schema": { "$ref": "#/entities/Confession" },
+      "description": "Stores all confessions."
+    },
+    "/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/Comment" },
+      "description": "Stores all comments."
+    },
+    "/confessions/{confessionId}/likes/{userId}": {
+      "schema": { "$ref": "#/entities/Like" },
+      "description": "Tracks likes per user for a confession."
+    }
+  }
+}
