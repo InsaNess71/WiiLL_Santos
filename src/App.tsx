@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, limit, where, getDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db, auth, signInAnonymouslyUser, logOut, checkRedirectResult } from './firebase';
+import { db, auth, signInAnonymouslyUser, logOut } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Confession, CATEGORIES, Chat } from './types';
 import ConfessionCard from './components/ConfessionCard';
@@ -102,8 +102,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    checkRedirectResult();
-    
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         try {
