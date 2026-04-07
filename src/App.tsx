@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, limit, where, getDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db, auth, signInWithGoogle } from './firebase';
+import { db, auth, signInWithGoogle, logOut } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Confession, CATEGORIES, Chat } from './types';
 import ConfessionCard from './components/ConfessionCard';
@@ -8,7 +8,7 @@ import CreateConfession from './components/CreateConfession';
 import NicknameModal from './components/NicknameModal';
 import ChatList from './components/ChatList';
 import InstallPrompt from './components/InstallPrompt';
-import { Ghost, PenSquare, Flame, Clock, Filter, LogIn, MessageSquare } from 'lucide-react';
+import { Ghost, PenSquare, Flame, Clock, Filter, LogIn, MessageSquare, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 type SortOption = 'recent' | 'popular';
@@ -289,6 +289,13 @@ export default function App() {
               >
                 <PenSquare className="w-4 h-4" />
                 <span className="hidden sm:inline">Nova Confissão</span>
+              </button>
+              <button 
+                onClick={logOut}
+                className="p-2 rounded-full bg-zinc-900 text-zinc-400 hover:text-red-400 border border-zinc-800 transition-colors"
+                title="Sair da conta"
+              >
+                <LogOut className="w-5 h-5" />
               </button>
             </div>
           )}
