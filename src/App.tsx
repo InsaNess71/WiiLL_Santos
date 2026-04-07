@@ -105,13 +105,17 @@ export default function App() {
     checkRedirectResult();
     
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
       if (currentUser) {
-        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-        if (!userDoc.exists()) {
-          setNeedsNickname(true);
+        try {
+          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+          if (!userDoc.exists()) {
+            setNeedsNickname(true);
+          }
+        } catch (error) {
+          console.error("Error checking user profile:", error);
         }
       }
+      setUser(currentUser);
       setIsAuthReady(true);
     });
     return () => unsubscribe();
