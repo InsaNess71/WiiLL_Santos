@@ -35,6 +35,27 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
             }
           }
         }
+      } else {
+        // Chat doesn't exist yet (lazy creation)
+        const uids = chatId.split('_');
+        setChat({
+          id: chatId,
+          participants: uids,
+          durationMode: '24h',
+          updatedAt: null,
+          expiresAt: null
+        } as unknown as Chat);
+
+        // Fetch other user's profile even if chat doesn't exist
+        if (auth.currentUser) {
+          const otherUserId = uids.find(id => id !== auth.currentUser?.uid);
+          if (otherUserId) {
+            const userSnap = await getDoc(doc(db, 'users', otherUserId));
+            if (userSnap.exists()) {
+              setOtherUser({ id: userSnap.id, ...userSnap.data() } as UserProfile);
+            }
+          }
+        }
       }
     });
 
@@ -82,6 +103,40 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
     try {
       const otherUserId = chat.participants.find(id => id !== auth.currentUser?.uid);
       
+      const chatRef = doc(db, 'chats', chatId);
+      const chatSnap = await getDoc(chatRef);
+
+      if (!chatSnap.exists()) {
+        // Create the chat document now that the first message is sent
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 24);
+
+        await setDoc(chatRef, {
+          participants: chat.participants,
+          durationMode: '24h',
+          expiresAt,
+          updatedAt: serverTimestamp(),
+          lastMessage: text,
+          unreadCount: {
+            [auth.currentUser.uid]: 0,
+            [otherUserId!]: 1
+          }
+        });
+      } else {
+        // Update existing chat
+        const updateData: any = {
+          updatedAt: serverTimestamp(),
+          lastMessage: text
+        };
+        
+        if (otherUserId) {
+          updateData[`unreadCount.${otherUserId}`] = increment(1);
+        }
+        
+        await updateDoc(chatRef, updateData);
+      }
+
+      // Add the message
       await addDoc(collection(db, 'chats', chatId, 'messages'), {
         senderId: auth.currentUser.uid,
         text,
@@ -89,16 +144,6 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
         isSystem: false
       });
       
-      const updateData: any = {
-        updatedAt: serverTimestamp(),
-        lastMessage: text
-      };
-      
-      if (otherUserId) {
-        updateData[`unreadCount.${otherUserId}`] = increment(1);
-      }
-      
-      await updateDoc(doc(db, 'chats', chatId), updateData);
     } catch (error) {
       console.error("Error sending message:", error);
     }
@@ -146,7 +191,7 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
             </h3>
             <div className="flex items-center space-x-1 text-xs text-zinc-500">
               <Clock className="w-3 h-3" />
-              <span>Expira em: {chat.expiresAt?.toDate ? formatDistanceToNow(chat.expiresAt.toDate(), { locale: ptBR }) : '...'}</span>
+              <span>Expira em: {chat.expiresAt?.toDate ? formatDistanceToNow(chat.expiresAt.toDate(), { locale: ptBR }) : 'Após a 1ª mensagem'}</span>
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { collection, query, orderBy, onSnapshot, limit, where, getDoc, doc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, limit, where, getDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth, signInWithGoogle } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Confession, CATEGORIES, Chat } from './types';
@@ -114,6 +114,25 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const updatePresence = async () => {
+      try {
+        await updateDoc(doc(db, 'users', user.uid), {
+          lastActive: serverTimestamp()
+        });
+      } catch (error) {
+        console.error("Error updating presence:", error);
+      }
+    };
+
+    updatePresence();
+    const interval = setInterval(updatePresence, 60000);
+
+    return () => clearInterval(interval);
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;

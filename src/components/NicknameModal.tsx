@@ -35,7 +35,8 @@ export default function NicknameModal({ onComplete }: NicknameModalProps) {
     try {
       await setDoc(doc(db, 'users', auth.currentUser.uid), {
         nickname: trimmed,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        lastActive: serverTimestamp()
       });
       onComplete();
     } catch (err) {

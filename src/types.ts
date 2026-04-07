@@ -22,6 +22,7 @@ export interface UserProfile {
   id: string;
   nickname: string;
   createdAt: any;
+  lastActive?: any;
 }
 
 export interface Chat {

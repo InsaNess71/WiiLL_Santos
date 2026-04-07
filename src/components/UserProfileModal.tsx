@@ -14,6 +14,7 @@ interface UserProfileModalProps {
 
 export default function UserProfileModal({ userId, onClose }: UserProfileModalProps) {
   const [nickname, setNickname] = useState<string>('Carregando...');
+  const [lastActive, setLastActive] = useState<any>(null);
   const [confessions, setConfessions] = useState<Confession[]>([]);
   const [loading, setLoading] = useState(true);
   const [startingChat, setStartingChat] = useState(false);
@@ -24,6 +25,7 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
         const userDoc = await getDoc(doc(db, 'users', userId));
         if (userDoc.exists()) {
           setNickname(userDoc.data().nickname);
+          setLastActive(userDoc.data().lastActive);
         } else {
           setNickname('Usuário Anônimo');
         }
@@ -61,25 +63,6 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
       const uids = [auth.currentUser.uid, userId].sort();
       const chatId = `${uids[0]}_${uids[1]}`;
       
-      const chatRef = doc(db, 'chats', chatId);
-      const chatSnap = await getDoc(chatRef);
-
-      if (!chatSnap.exists()) {
-        const expiresAt = new Date();
-        expiresAt.setHours(expiresAt.getHours() + 24);
-
-        await setDoc(chatRef, {
-          participants: uids,
-          durationMode: '24h',
-          expiresAt,
-          updatedAt: serverTimestamp(),
-          unreadCount: {
-            [uids[0]]: 0,
-            [uids[1]]: 0
-          }
-        });
-      }
-      
       window.dispatchEvent(new CustomEvent('openChat', { detail: { chatId } }));
       onClose();
     } catch (error) {
@@ -92,6 +75,22 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
 
   const isMe = auth.currentUser?.uid === userId;
 
+  let statusText = '';
+  let isOnline = false;
+
+  if (lastActive?.toDate) {
+    const lastActiveDate = lastActive.toDate();
+    const now = new Date();
+    const diffMs = now.getTime() - lastActiveDate.getTime();
+    
+    if (diffMs < 3 * 60 * 1000) {
+      isOnline = true;
+      statusText = 'Online agora';
+    } else {
+      statusText = `Visto por último ${formatDistanceToNow(lastActiveDate, { addSuffix: true, locale: ptBR })}`;
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <motion.div 
@@ -102,12 +101,23 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
       >
         <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
           <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-pink-600/20 rounded-full flex items-center justify-center text-pink-500">
+            <div className="w-12 h-12 bg-pink-600/20 rounded-full flex items-center justify-center text-pink-500 relative">
               <User className="w-6 h-6" />
+              {isOnline && (
+                <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-zinc-900 rounded-full"></span>
+              )}
             </div>
             <div>
               <h2 className="text-xl font-bold text-zinc-100">{nickname}</h2>
-              <p className="text-sm text-zinc-500">{confessions.length} confissões</p>
+              <div className="flex items-center space-x-2 mt-0.5">
+                <p className="text-sm text-zinc-500">{confessions.length} confissões</p>
+                {statusText && (
+                  <>
+                    <span className="text-zinc-700">•</span>
+                    <p className="text-xs text-zinc-400">{statusText}</p>
+                  </>
+                )}
+              </div>
             </div>
           </div>
           <button 
