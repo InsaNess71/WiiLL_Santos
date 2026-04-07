@@ -116,7 +116,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || needsNickname) return;
 
     const updatePresence = async () => {
       try {
@@ -132,7 +132,7 @@ export default function App() {
     const interval = setInterval(updatePresence, 60000);
 
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, needsNickname]);
 
   useEffect(() => {
     if (!user) return;
