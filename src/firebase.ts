@@ -1,16 +1,27 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
+// Override authDomain to use the current hostname.
+// This works with the proxy in netlify.toml to bypass mobile browser cookie blocking (ITP)
+const config = {
+  ...firebaseConfig,
+  authDomain: window.location.hostname === 'localhost' ? firebaseConfig.authDomain : window.location.hostname
+};
+
+const app = initializeApp(config);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 
 export const signInWithGoogle = async () => {
   try {
     const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    if (window.self !== window.top) {
+      await signInWithPopup(auth, provider);
+    } else {
+      await signInWithRedirect(auth, provider);
+    }
   } catch (error: any) {
     console.error("Error signing in with Google", error);
     if (error.code === 'auth/popup-blocked') {
