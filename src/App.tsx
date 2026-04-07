@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, limit, where, getDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db, auth, signInWithGoogle, logOut, checkRedirectResult } from './firebase';
+import { db, auth, signInAnonymouslyUser, logOut, checkRedirectResult } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Confession, CATEGORIES, Chat } from './types';
 import ConfessionCard from './components/ConfessionCard';
@@ -266,11 +266,11 @@ export default function App() {
           
           {!user ? (
             <button 
-              onClick={signInWithGoogle}
-              className="flex items-center space-x-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-4 py-2 rounded-full text-sm font-medium transition-colors"
+              onClick={signInAnonymouslyUser}
+              className="flex items-center space-x-2 bg-pink-600 hover:bg-pink-500 text-white px-5 py-2 rounded-full text-sm font-medium transition-colors shadow-lg shadow-pink-500/20"
             >
               <LogIn className="w-4 h-4" />
-              <span>Entrar para postar</span>
+              <span>Entrar Anonimamente</span>
             </button>
           ) : (
             <div className="flex items-center space-x-3">

@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, signInAnonymously } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -23,8 +23,19 @@ export const checkRedirectResult = async () => {
     console.error("Redirect auth error:", error);
     if (error.code === 'auth/unauthorized-domain') {
       alert("ERRO DE SEGURANÇA: O site não está autorizado no Firebase! Vá no painel do Firebase > Authentication > Settings > Authorized Domains e adicione este link.");
+    }
+  }
+};
+
+export const signInAnonymouslyUser = async () => {
+  try {
+    await signInAnonymously(auth);
+  } catch (error: any) {
+    console.error("Error signing in anonymously", error);
+    if (error.code === 'auth/operation-not-allowed') {
+      alert("O Login Anônimo não está ativado! Vá no Firebase > Authentication > Sign-in method > Adicionar novo provedor > Anônimo > Ativar.");
     } else {
-      alert("Erro ao fazer login: " + error.message);
+      alert("Erro ao entrar: " + error.message);
     }
   }
 };
