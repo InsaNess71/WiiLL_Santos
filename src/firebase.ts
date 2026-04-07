@@ -10,15 +10,14 @@ export const auth = getAuth(app);
 export const signInWithGoogle = async () => {
   try {
     const provider = new GoogleAuthProvider();
-    // Se estiver rodando dentro de um iframe (como a prévia do AI Studio), usa Popup
-    if (window.self !== window.top) {
-      await signInWithPopup(auth, provider);
-    } else {
-      // Se estiver rodando solto (Netlify, Celular, PWA), usa Redirecionamento
-      await signInWithRedirect(auth, provider);
-    }
-  } catch (error) {
+    await signInWithPopup(auth, provider);
+  } catch (error: any) {
     console.error("Error signing in with Google", error);
+    if (error.code === 'auth/unauthorized-domain') {
+      alert("Erro: O domínio atual não está autorizado no Firebase. Adicione este domínio no painel do Firebase Authentication.");
+    } else {
+      alert("Erro ao fazer login: " + error.message);
+    }
   }
 };
 
