@@ -8,7 +8,8 @@ import CreateConfession from './components/CreateConfession';
 import NicknameModal from './components/NicknameModal';
 import ChatList from './components/ChatList';
 import InstallPrompt from './components/InstallPrompt';
-import { Ghost, PenSquare, Flame, Clock, Filter, LogIn, MessageSquare, LogOut } from 'lucide-react';
+import UserProfileModal from './components/UserProfileModal';
+import { Ghost, PenSquare, Flame, Clock, Filter, LogIn, MessageSquare, LogOut, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 type SortOption = 'recent' | 'popular';
@@ -69,6 +70,7 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showChats, setShowChats] = useState(false);
+  const [showMyProfile, setShowMyProfile] = useState(false);
   const [needsNickname, setNeedsNickname] = useState(false);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [totalUnread, setTotalUnread] = useState(0);
@@ -295,6 +297,13 @@ export default function App() {
                 <span className="hidden sm:inline">Nova Confissão</span>
               </button>
               <button 
+                onClick={() => setShowMyProfile(true)}
+                className="p-2 rounded-full bg-zinc-900 text-zinc-400 hover:text-pink-400 border border-zinc-800 transition-colors"
+                title="Meu Perfil"
+              >
+                <User className="w-5 h-5" />
+              </button>
+              <button 
                 onClick={logOut}
                 className="p-2 rounded-full bg-zinc-900 text-zinc-400 hover:text-red-400 border border-zinc-800 transition-colors"
                 title="Sair da conta"
@@ -373,6 +382,7 @@ export default function App() {
       <AnimatePresence>
         {showCreate && <CreateConfession onClose={() => setShowCreate(false)} />}
         {needsNickname && <NicknameModal onComplete={() => setNeedsNickname(false)} />}
+        {showMyProfile && user && <UserProfileModal userId={user.uid} onClose={() => setShowMyProfile(false)} />}
         
         {toast && (
           <motion.div

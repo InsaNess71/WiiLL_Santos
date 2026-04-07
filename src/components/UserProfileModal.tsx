@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { X, MessageSquare, User } from 'lucide-react';
+import { X, MessageSquare, User, Edit2, Save } from 'lucide-react';
 import { db, auth } from '../firebase';
-import { doc, getDoc, collection, query, where, orderBy, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
-import { Confession } from '../types';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { Confession, UserProfile } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -13,21 +13,35 @@ interface UserProfileModalProps {
 }
 
 export default function UserProfileModal({ userId, onClose }: UserProfileModalProps) {
-  const [nickname, setNickname] = useState<string>('Carregando...');
-  const [lastActive, setLastActive] = useState<any>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [confessions, setConfessions] = useState<Confession[]>([]);
   const [loading, setLoading] = useState(true);
   const [startingChat, setStartingChat] = useState(false);
+  
+  // Edit mode state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    nickname: '',
+    gender: '',
+    maritalStatus: '',
+    bio: ''
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
         const userDoc = await getDoc(doc(db, 'users', userId));
         if (userDoc.exists()) {
-          setNickname(userDoc.data().nickname);
-          setLastActive(userDoc.data().lastActive);
-        } else {
-          setNickname('Usuário Anônimo');
+          const data = userDoc.data() as UserProfile;
+          setProfile(data);
+          setEditForm({
+            nickname: data.nickname || '',
+            gender: data.gender || '',
+            maritalStatus: data.maritalStatus || '',
+            bio: data.bio || ''
+          });
         }
 
         const q = query(
@@ -37,7 +51,6 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
         const snap = await getDocs(q);
         const userConfessions = snap.docs.map(d => ({ id: d.id, ...d.data() } as Confession));
         
-        // Sort in JS to avoid Firestore composite index requirements
         userConfessions.sort((a, b) => {
           const timeA = a.createdAt?.toDate?.()?.getTime() || 0;
           const timeB = b.createdAt?.toDate?.()?.getTime() || 0;
@@ -47,7 +60,6 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
         setConfessions(userConfessions);
       } catch (error) {
         console.error("Error fetching profile:", error);
-        setNickname('Usuário');
       } finally {
         setLoading(false);
       }
@@ -73,13 +85,46 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
     }
   };
 
+  const handleSaveProfile = async () => {
+    if (!auth.currentUser || auth.currentUser.uid !== userId) return;
+    
+    if (editForm.nickname.length < 3 || editForm.nickname.length > 20) {
+      setError('O apelido deve ter entre 3 e 20 caracteres.');
+      return;
+    }
+
+    setIsSaving(true);
+    setError('');
+
+    try {
+      const updateData: any = {
+        nickname: editForm.nickname.trim(),
+      };
+      
+      if (editForm.gender) updateData.gender = editForm.gender.trim();
+      if (editForm.maritalStatus) updateData.maritalStatus = editForm.maritalStatus.trim();
+      if (editForm.bio) updateData.bio = editForm.bio.trim();
+
+      await updateDoc(doc(db, 'users', userId), updateData);
+      
+      setProfile(prev => prev ? { ...prev, ...updateData } : null);
+      setIsEditing(false);
+    } catch (err) {
+      console.error("Error updating profile:", err);
+      setError('Erro ao salvar o perfil. Tente novamente.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const isMe = auth.currentUser?.uid === userId;
+  const nickname = profile?.nickname || 'Usuário Anônimo';
 
   let statusText = '';
   let isOnline = false;
 
-  if (lastActive?.toDate) {
-    const lastActiveDate = lastActive.toDate();
+  if (profile?.lastActive?.toDate) {
+    const lastActiveDate = profile.lastActive.toDate();
     const now = new Date();
     const diffMs = now.getTime() - lastActiveDate.getTime();
     
@@ -101,65 +146,183 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
       >
         <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
           <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-pink-600/20 rounded-full flex items-center justify-center text-pink-500 relative">
+            <div className="w-12 h-12 bg-pink-600/20 rounded-full flex items-center justify-center text-pink-500 relative shrink-0">
               <User className="w-6 h-6" />
-              {isOnline && (
+              {isOnline && !isEditing && (
                 <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-zinc-900 rounded-full"></span>
               )}
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-zinc-100">{nickname}</h2>
-              <div className="flex items-center space-x-2 mt-0.5">
-                <p className="text-sm text-zinc-500">{confessions.length} confissões</p>
-                {statusText && (
-                  <>
-                    <span className="text-zinc-700">•</span>
-                    <p className="text-xs text-zinc-400">{statusText}</p>
-                  </>
-                )}
-              </div>
+            <div className="flex-1">
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editForm.nickname}
+                  onChange={(e) => setEditForm({ ...editForm, nickname: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-md px-3 py-1.5 text-zinc-100 text-lg font-bold focus:outline-none focus:border-pink-500/50"
+                  placeholder="Seu apelido"
+                  maxLength={20}
+                />
+              ) : (
+                <>
+                  <h2 className="text-xl font-bold text-zinc-100">{nickname}</h2>
+                  <div className="flex items-center space-x-2 mt-0.5">
+                    <p className="text-sm text-zinc-500">{confessions.length} confissões</p>
+                    {statusText && (
+                      <>
+                        <span className="text-zinc-700">•</span>
+                        <p className="text-xs text-zinc-400">{statusText}</p>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
-          <button 
-            onClick={onClose}
-            className="p-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-full transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center space-x-2 ml-4">
+            {isMe && !isEditing && (
+              <button 
+                onClick={() => setIsEditing(true)}
+                className="p-2 text-zinc-400 hover:text-pink-400 hover:bg-zinc-800 rounded-full transition-colors"
+                title="Editar Perfil"
+              >
+                <Edit2 className="w-4 h-4" />
+              </button>
+            )}
+            <button 
+              onClick={onClose}
+              className="p-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-full transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
-          {!isMe && auth.currentUser && (
-            <button
-              onClick={handleStartChat}
-              disabled={startingChat}
-              className="w-full mb-6 flex items-center justify-center space-x-2 bg-pink-600 hover:bg-pink-500 text-white py-3 px-4 rounded-xl font-medium transition-colors disabled:opacity-50"
-            >
-              <MessageSquare className="w-5 h-5" />
-              <span>{startingChat ? 'Iniciando...' : 'Chamar no Bate-papo'}</span>
-            </button>
+          {error && (
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400">
+              {error}
+            </div>
           )}
 
-          <h3 className="text-sm font-medium text-zinc-400 mb-4 uppercase tracking-wider">Confissões de {nickname}</h3>
-          
-          {loading ? (
-            <div className="text-center py-8 text-zinc-500">Carregando...</div>
-          ) : confessions.length === 0 ? (
-            <div className="text-center py-8 text-zinc-500">Nenhuma confissão ainda.</div>
-          ) : (
-            <div className="space-y-4">
-              {confessions.map(conf => (
-                <div key={conf.id} className="bg-zinc-950 p-4 rounded-xl border border-zinc-800/50">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-pink-500">{conf.category}</span>
-                    <span className="text-xs text-zinc-600">
-                      {conf.createdAt?.toDate ? formatDistanceToNow(conf.createdAt.toDate(), { addSuffix: true, locale: ptBR }) : 'agora'}
-                    </span>
-                  </div>
-                  <p className="text-sm text-zinc-300">"{conf.text}"</p>
-                </div>
-              ))}
+          {isEditing ? (
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Gênero</label>
+                <select
+                  value={editForm.gender}
+                  onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-sm text-zinc-100 focus:outline-none focus:border-pink-500/50"
+                >
+                  <option value="">Prefiro não dizer</option>
+                  <option value="Mulher">Mulher</option>
+                  <option value="Homem">Homem</option>
+                  <option value="Não-binário">Não-binário</option>
+                  <option value="Outro">Outro</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Estado Civil</label>
+                <select
+                  value={editForm.maritalStatus}
+                  onChange={(e) => setEditForm({ ...editForm, maritalStatus: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-sm text-zinc-100 focus:outline-none focus:border-pink-500/50"
+                >
+                  <option value="">Prefiro não dizer</option>
+                  <option value="Solteiro(a)">Solteiro(a)</option>
+                  <option value="Namorando">Namorando</option>
+                  <option value="Casado(a)">Casado(a)</option>
+                  <option value="Divorciado(a)">Divorciado(a)</option>
+                  <option value="Viúvo(a)">Viúvo(a)</option>
+                  <option value="Enrolado(a)">Enrolado(a)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Biografia</label>
+                <textarea
+                  value={editForm.bio}
+                  onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+                  placeholder="Conte um pouco sobre você..."
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-100 focus:outline-none focus:border-pink-500/50 resize-none h-24"
+                  maxLength={500}
+                />
+              </div>
+              <div className="flex space-x-3 pt-2">
+                <button
+                  onClick={() => setIsEditing(false)}
+                  className="flex-1 py-2 rounded-lg font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveProfile}
+                  disabled={isSaving}
+                  className="flex-1 py-2 rounded-lg font-medium text-white bg-pink-600 hover:bg-pink-500 transition-colors flex items-center justify-center space-x-2 disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{isSaving ? 'Salvando...' : 'Salvar'}</span>
+                </button>
+              </div>
             </div>
+          ) : (
+            <>
+              {(profile?.bio || profile?.gender || profile?.maritalStatus) && (
+                <div className="mb-6 space-y-4">
+                  {profile.bio && (
+                    <div className="bg-zinc-950/50 p-4 rounded-xl border border-zinc-800/50">
+                      <p className="text-sm text-zinc-300 italic">"{profile.bio}"</p>
+                    </div>
+                  )}
+                  
+                  {(profile.gender || profile.maritalStatus) && (
+                    <div className="flex flex-wrap gap-2">
+                      {profile.gender && (
+                        <span className="px-3 py-1 bg-zinc-800 text-zinc-300 text-xs rounded-full border border-zinc-700">
+                          {profile.gender}
+                        </span>
+                      )}
+                      {profile.maritalStatus && (
+                        <span className="px-3 py-1 bg-zinc-800 text-zinc-300 text-xs rounded-full border border-zinc-700">
+                          {profile.maritalStatus}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!isMe && auth.currentUser && (
+                <button
+                  onClick={handleStartChat}
+                  disabled={startingChat}
+                  className="w-full mb-6 flex items-center justify-center space-x-2 bg-pink-600 hover:bg-pink-500 text-white py-3 px-4 rounded-xl font-medium transition-colors disabled:opacity-50"
+                >
+                  <MessageSquare className="w-5 h-5" />
+                  <span>{startingChat ? 'Iniciando...' : 'Chamar no Bate-papo'}</span>
+                </button>
+              )}
+
+              <h3 className="text-sm font-medium text-zinc-400 mb-4 uppercase tracking-wider">Confissões de {nickname}</h3>
+              
+              {loading ? (
+                <div className="text-center py-8 text-zinc-500">Carregando...</div>
+              ) : confessions.length === 0 ? (
+                <div className="text-center py-8 text-zinc-500">Nenhuma confissão ainda.</div>
+              ) : (
+                <div className="space-y-4">
+                  {confessions.map(conf => (
+                    <div key={conf.id} className="bg-zinc-950 p-4 rounded-xl border border-zinc-800/50">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-pink-500">{conf.category}</span>
+                        <span className="text-xs text-zinc-600">
+                          {conf.createdAt?.toDate ? formatDistanceToNow(conf.createdAt.toDate(), { addSuffix: true, locale: ptBR }) : 'agora'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-zinc-300">"{conf.text}"</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </motion.div>

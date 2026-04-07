@@ -23,6 +23,9 @@ export interface UserProfile {
   nickname: string;
   createdAt: any;
   lastActive?: any;
+  gender?: string;
+  maritalStatus?: string;
+  bio?: string;
 }
 
 export interface Chat {
