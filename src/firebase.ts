@@ -1,11 +1,22 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, signOut, signInAnonymously } from 'firebase/auth';
+import { getAuth, signOut, signInAnonymously, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
+
+const googleProvider = new GoogleAuthProvider();
+
+export const signInWithGoogle = async () => {
+  try {
+    await signInWithPopup(auth, googleProvider);
+  } catch (error: any) {
+    console.error("Error signing in with Google", error);
+    alert("Erro ao entrar com Google: " + error.message);
+  }
+};
 
 export const signInAnonymouslyUser = async () => {
   try {
