@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, getDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, getDoc, writeBatch } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Comment } from '../types';
 import { Send, User } from 'lucide-react';
@@ -95,16 +95,22 @@ export default function CommentSection({ confessionId }: { confessionId: string 
 
     setIsSubmitting(true);
     try {
-      await addDoc(collection(db, 'comments'), {
+      const batch = writeBatch(db);
+      
+      const newCommentRef = doc(collection(db, 'comments'));
+      batch.set(newCommentRef, {
         confessionId,
         text: newComment.trim(),
         createdAt: serverTimestamp(),
         authorId: auth.currentUser.uid
       });
 
-      await updateDoc(doc(db, 'confessions', confessionId), {
+      const confessionRef = doc(db, 'confessions', confessionId);
+      batch.update(confessionRef, {
         commentCount: increment(1)
       });
+
+      await batch.commit();
 
       setNewComment('');
     } catch (error) {

@@ -38,7 +38,10 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if true;
-      allow create, update: if isOwner(userId) && isValidNickname(request.resource.data.nickname);
+      allow create: if isOwner(userId) && isValidNickname(request.resource.data.nickname);
+      allow update: if isOwner(userId) && 
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname', 'lastActive']) &&
+                    (!('nickname' in request.resource.data.diff(resource.data).affectedKeys()) || isValidNickname(request.resource.data.nickname));
     }
 
     match /chats/{chatId} {
@@ -50,7 +53,10 @@ service cloud.firestore {
                     request.resource.data.participants.size() == 2 &&
                     request.resource.data.durationMode in ['1h', '24h'] &&
                     request.resource.data.expiresAt is timestamp;
-      allow update: if isAuthenticated() && request.auth.uid in resource.data.participants;
+      allow update: if isAuthenticated() && 
+                    request.auth.uid in resource.data.participants &&
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt', 'lastMessage', 'unreadCount', 'durationMode', 'expiresAt']) &&
+                    request.resource.data.participants == resource.data.participants;
 
       match /messages/{messageId} {
         allow read: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;

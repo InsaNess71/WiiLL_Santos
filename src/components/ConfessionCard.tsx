@@ -4,7 +4,7 @@ import { Heart, MessageCircle, Share2, User, Trash2, AlertTriangle } from 'lucid
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '../lib/utils';
-import { doc, updateDoc, increment, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, increment, setDoc, deleteDoc, getDoc, writeBatch } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import CommentSection from './CommentSection';
@@ -58,13 +58,16 @@ export default function ConfessionCard({ confession }: ConfessionCardProps) {
     const confessionRef = doc(db, 'confessions', confession.id);
 
     try {
+      const batch = writeBatch(db);
       if (isLiked) {
-        await deleteDoc(likeRef);
-        await updateDoc(confessionRef, { likes: increment(-1) });
+        batch.delete(likeRef);
+        batch.update(confessionRef, { likes: increment(-1) });
+        await batch.commit();
         setIsLiked(false);
       } else {
-        await setDoc(likeRef, { createdAt: new Date() });
-        await updateDoc(confessionRef, { likes: increment(1) });
+        batch.set(likeRef, { createdAt: new Date() });
+        batch.update(confessionRef, { likes: increment(1) });
+        await batch.commit();
         setIsLiked(true);
       }
     } catch (error) {
