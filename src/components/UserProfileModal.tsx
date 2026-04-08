@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { X, MessageSquare, User, Edit2, Save, FileText, Shield } from 'lucide-react';
-import { db, auth } from '../firebase';
+import { X, MessageSquare, User, Edit2, Save, FileText, Shield, LogOut } from 'lucide-react';
+import { db, auth, logOut } from '../firebase';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
 import { Confession, UserProfile, AVATARS } from '../types';
 import { formatDistanceToNow } from 'date-fns';
@@ -367,6 +367,18 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
                     <div className="flex items-center space-x-3">
                       <Shield className="w-5 h-5 text-zinc-500" />
                       <span className="text-sm font-medium">Política de Privacidade</span>
+                    </div>
+                  </button>
+                  <button 
+                    onClick={() => {
+                      onClose();
+                      logOut();
+                    }}
+                    className="w-full flex items-center justify-between p-3 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors text-red-400 mt-4"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <LogOut className="w-5 h-5" />
+                      <span className="text-sm font-medium">Sair da Conta</span>
                     </div>
                   </button>
                 </div>

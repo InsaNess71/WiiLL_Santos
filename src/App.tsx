@@ -336,13 +336,13 @@ export default function App() {
             </motion.div>
           ) : (
             <>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center justify-center sm:justify-start w-full sm:w-auto space-x-2">
                 <Ghost className="w-6 h-6 text-pink-500" />
                 <h1 className="text-xl font-bold tracking-tight">Confissões<span className="text-pink-500">.</span></h1>
               </div>
               
               {!user ? (
-                <div className="flex items-center space-x-3">
+                <div className="hidden sm:flex items-center space-x-3">
                   <button 
                     onClick={() => setShowSearch(true)}
                     className="p-2 rounded-full bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800 transition-colors"
@@ -373,7 +373,7 @@ export default function App() {
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center space-x-3">
+                <div className="hidden sm:flex items-center space-x-3">
                   <button 
                     onClick={() => setShowSearch(true)}
                     className="p-2 rounded-full bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800 transition-colors"
@@ -564,6 +564,13 @@ export default function App() {
               <span className="text-[10px] font-medium">Feed</span>
             </button>
             <button 
+              onClick={() => setShowSearch(true)}
+              className="flex flex-col items-center space-y-1 text-zinc-500 hover:text-zinc-300"
+            >
+              <Search className="w-6 h-6" />
+              <span className="text-[10px] font-medium">Buscar</span>
+            </button>
+            <button 
               onClick={() => setShowCreate(true)}
               className="flex flex-col items-center space-y-1 text-zinc-500 hover:text-zinc-300 relative -top-4"
             >
@@ -583,7 +590,7 @@ export default function App() {
                   </span>
                 )}
               </div>
-              <span className="text-[10px] font-medium">Notificações</span>
+              <span className="text-[10px] font-medium">Alertas</span>
             </button>
             <button 
               onClick={() => setShowMyProfile(true)}
