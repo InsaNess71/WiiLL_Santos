@@ -40,14 +40,15 @@ service cloud.firestore {
       return (!('nickname' in data) || isValidNickname(data.nickname)) &&
              (!('gender' in data) || (data.gender is string && data.gender.size() <= 50)) &&
              (!('maritalStatus' in data) || (data.maritalStatus is string && data.maritalStatus.size() <= 50)) &&
-             (!('bio' in data) || (data.bio is string && data.bio.size() <= 500));
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 500)) &&
+             (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 200));
     }
 
     match /users/{userId} {
       allow read: if true;
       allow create: if isOwner(userId) && isValidNickname(request.resource.data.nickname);
       allow update: if isOwner(userId) && 
-                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname', 'lastActive', 'gender', 'maritalStatus', 'bio']) &&
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname', 'lastActive', 'gender', 'maritalStatus', 'bio', 'avatar']) &&
                     isValidProfile(request.resource.data);
     }
 

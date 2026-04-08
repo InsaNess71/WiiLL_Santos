@@ -9,9 +9,6 @@ interface CreateConfessionProps {
   onClose: () => void;
 }
 
-// Basic moderation filter
-const FORBIDDEN_WORDS = ['matar', 'suicídio', 'bomba', 'terrorismo', 'estupro'];
-
 export default function CreateConfession({ onClose }: CreateConfessionProps) {
   const [text, setText] = useState('');
   const [category, setCategory] = useState(CATEGORIES[0]);
@@ -23,14 +20,6 @@ export default function CreateConfession({ onClose }: CreateConfessionProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!text.trim() || !auth.currentUser) return;
-
-    // Basic moderation check
-    const lowerText = text.toLowerCase();
-    const hasForbiddenWord = FORBIDDEN_WORDS.some(word => lowerText.includes(word));
-    if (hasForbiddenWord) {
-      setError('Sua confissão contém palavras não permitidas pelas nossas diretrizes de comunidade.');
-      return;
-    }
 
     setIsSubmitting(true);
     setError('');

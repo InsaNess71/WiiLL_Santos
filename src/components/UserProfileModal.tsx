@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { X, MessageSquare, User, Edit2, Save } from 'lucide-react';
 import { db, auth } from '../firebase';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
-import { Confession, UserProfile } from '../types';
+import { Confession, UserProfile, AVATARS } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -24,7 +24,8 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
     nickname: '',
     gender: '',
     maritalStatus: '',
-    bio: ''
+    bio: '',
+    avatar: ''
   });
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
@@ -40,7 +41,8 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
             nickname: data.nickname || '',
             gender: data.gender || '',
             maritalStatus: data.maritalStatus || '',
-            bio: data.bio || ''
+            bio: data.bio || '',
+            avatar: data.avatar || ''
           });
         }
 
@@ -104,6 +106,7 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
       if (editForm.gender) updateData.gender = editForm.gender.trim();
       if (editForm.maritalStatus) updateData.maritalStatus = editForm.maritalStatus.trim();
       if (editForm.bio) updateData.bio = editForm.bio.trim();
+      if (editForm.avatar) updateData.avatar = editForm.avatar;
 
       await updateDoc(doc(db, 'users', userId), updateData);
       
@@ -146,10 +149,14 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
       >
         <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
           <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-pink-600/20 rounded-full flex items-center justify-center text-pink-500 relative shrink-0">
-              <User className="w-6 h-6" />
+            <div className="w-14 h-14 bg-pink-600/20 rounded-full flex items-center justify-center text-pink-500 relative shrink-0 overflow-hidden">
+              {profile?.avatar ? (
+                <img src={profile.avatar} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-7 h-7" />
+              )}
               {isOnline && !isEditing && (
-                <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-zinc-900 rounded-full"></span>
+                <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-zinc-900 rounded-full"></span>
               )}
             </div>
             <div className="flex-1">
@@ -205,7 +212,22 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
           )}
 
           {isEditing ? (
-            <div className="space-y-4 mb-6">
+            <div className="space-y-5 mb-6">
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-2">Escolha seu Avatar</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {AVATARS.map((avatarUrl, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setEditForm({ ...editForm, avatar: avatarUrl })}
+                      className={`relative rounded-full overflow-hidden border-2 transition-all ${editForm.avatar === avatarUrl ? 'border-pink-500 scale-110 shadow-lg shadow-pink-500/20' : 'border-transparent hover:border-zinc-700 bg-zinc-800/50'}`}
+                    >
+                      <img src={avatarUrl} alt={`Avatar ${idx}`} className="w-full h-auto" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
               <div>
                 <label className="block text-xs font-medium text-zinc-400 mb-1.5">Gênero</label>
                 <select

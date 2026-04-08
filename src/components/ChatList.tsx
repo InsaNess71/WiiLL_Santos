@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, where, onSnapshot, getDoc, doc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Chat, UserProfile } from '../types';
-import { MessageSquare, Clock, Ghost } from 'lucide-react';
+import { MessageSquare, Clock, Ghost, User } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import ChatRoom from './ChatRoom';
@@ -103,8 +103,15 @@ export default function ChatList({ activeChatId, setActiveChatId }: ChatListProp
               <button
                 key={chat.id}
                 onClick={() => setActiveChatId(chat.id)}
-                className="w-full text-left p-4 hover:bg-zinc-800/50 transition-colors flex items-center justify-between group"
+                className="w-full text-left p-4 hover:bg-zinc-800/50 transition-colors flex items-center space-x-3 group"
               >
+                <div className="w-12 h-12 bg-pink-600/20 rounded-full flex items-center justify-center text-pink-500 shrink-0 overflow-hidden">
+                  {chat.otherUser?.avatar ? (
+                    <img src={chat.otherUser.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <User className="w-6 h-6" />
+                  )}
+                </div>
                 <div className="flex-1 pr-4 truncate">
                   <h3 className="font-medium text-zinc-100 group-hover:text-pink-400 transition-colors">
                     {chat.otherUser ? chat.otherUser.nickname : 'Usuário Anônimo'}

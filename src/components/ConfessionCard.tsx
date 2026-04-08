@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Confession } from '../types';
-import { Heart, MessageCircle, Share2, User, Trash2, AlertTriangle } from 'lucide-react';
+import { Heart, MessageCircle, Share2, User, Trash2, AlertTriangle, Flag } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '../lib/utils';
-import { doc, updateDoc, increment, setDoc, deleteDoc, getDoc, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc, increment, setDoc, deleteDoc, getDoc, writeBatch, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import CommentSection from './CommentSection';
@@ -19,9 +19,12 @@ export default function ConfessionCard({ confession }: ConfessionCardProps) {
   const [showComments, setShowComments] = useState(false);
   const [likeLoading, setLikeLoading] = useState(false);
   const [authorNickname, setAuthorNickname] = useState<string>('Carregando...');
+  const [authorAvatar, setAuthorAvatar] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isReporting, setIsReporting] = useState(false);
+  const [hasReported, setHasReported] = useState(false);
 
   useEffect(() => {
     const checkLike = async () => {
@@ -39,6 +42,7 @@ export default function ConfessionCard({ confession }: ConfessionCardProps) {
         const userDoc = await getDoc(doc(db, 'users', confession.authorId));
         if (userDoc.exists()) {
           setAuthorNickname(userDoc.data().nickname);
+          setAuthorAvatar(userDoc.data().avatar || null);
         } else {
           setAuthorNickname('Usuário Anônimo');
         }
@@ -113,6 +117,28 @@ export default function ConfessionCard({ confession }: ConfessionCardProps) {
     }
   };
 
+  const handleReport = async () => {
+    if (!auth.currentUser || hasReported || isReporting) return;
+    setIsReporting(true);
+    try {
+      await addDoc(collection(db, 'reports'), {
+        confessionId: confession.id,
+        reportedBy: auth.currentUser.uid,
+        createdAt: serverTimestamp(),
+        status: 'pending'
+      });
+      setHasReported(true);
+      const btn = document.getElementById(`report-btn-${confession.id}`);
+      if (btn) {
+        btn.innerHTML = '<span class="text-xs text-red-500">Denunciado</span>';
+      }
+    } catch (error) {
+      console.error("Error reporting:", error);
+    } finally {
+      setIsReporting(false);
+    }
+  };
+
   const isOwner = auth.currentUser?.uid === confession.authorId;
 
   return (
@@ -126,8 +152,12 @@ export default function ConfessionCard({ confession }: ConfessionCardProps) {
           onClick={() => setShowProfile(true)}
           className="flex items-center space-x-3 hover:opacity-80 transition-opacity text-left"
         >
-          <div className="w-10 h-10 bg-pink-600/20 rounded-full flex items-center justify-center text-pink-500 shrink-0">
-            <User className="w-5 h-5" />
+          <div className="w-10 h-10 bg-pink-600/20 rounded-full flex items-center justify-center text-pink-500 shrink-0 overflow-hidden">
+            {authorAvatar ? (
+              <img src={authorAvatar} alt="Avatar" className="w-full h-full object-cover" />
+            ) : (
+              <User className="w-5 h-5" />
+            )}
           </div>
           <div>
             <p className="text-sm font-bold text-zinc-100">{authorNickname}</p>
@@ -190,9 +220,22 @@ export default function ConfessionCard({ confession }: ConfessionCardProps) {
             id={`share-btn-${confession.id}`}
             onClick={handleShare}
             className="flex items-center space-x-1.5 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+            title="Compartilhar"
           >
             <Share2 className="w-5 h-5" />
           </button>
+          
+          {!isOwner && (
+            <button 
+              id={`report-btn-${confession.id}`}
+              onClick={handleReport}
+              disabled={hasReported || isReporting}
+              className="flex items-center space-x-1.5 text-sm text-zinc-400 hover:text-red-400 transition-colors disabled:opacity-50"
+              title="Denunciar"
+            >
+              <Flag className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 

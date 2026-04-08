@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, getDoc, setDoc, increment } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Chat, ChatMessage, UserProfile } from '../types';
-import { Send, Clock, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Send, Clock, AlertTriangle, ArrowLeft, User } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -185,6 +185,13 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
           <button onClick={onBack} className="text-zinc-400 hover:text-zinc-200">
             <ArrowLeft className="w-5 h-5" />
           </button>
+          <div className="w-10 h-10 bg-pink-600/20 rounded-full flex items-center justify-center text-pink-500 shrink-0 overflow-hidden">
+            {otherUser?.avatar ? (
+              <img src={otherUser.avatar} alt="Avatar" className="w-full h-full object-cover" />
+            ) : (
+              <User className="w-5 h-5" />
+            )}
+          </div>
           <div>
             <h3 className="font-medium text-zinc-100">
               {otherUser ? otherUser.nickname : 'Usuário Anônimo'}
