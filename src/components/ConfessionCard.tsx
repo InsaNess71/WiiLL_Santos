@@ -9,6 +9,7 @@ import { db, auth } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import CommentSection from './CommentSection';
 import UserProfileModal from './UserProfileModal';
+import { getUserProfile } from '../lib/userCache';
 
 interface ConfessionCardProps {
   confession: Confession;
@@ -50,10 +51,10 @@ export default function ConfessionCard({ confession }: ConfessionCardProps) {
   useEffect(() => {
     const fetchAuthor = async () => {
       try {
-        const userDoc = await getDoc(doc(db, 'users', confession.authorId));
-        if (userDoc.exists()) {
-          setAuthorNickname(userDoc.data().nickname);
-          setAuthorAvatar(userDoc.data().avatar || null);
+        const userProfile = await getUserProfile(confession.authorId);
+        if (userProfile) {
+          setAuthorNickname(userProfile.nickname);
+          setAuthorAvatar(userProfile.avatar || null);
         } else {
           setAuthorNickname('Usuário Anônimo');
         }

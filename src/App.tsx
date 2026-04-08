@@ -10,6 +10,8 @@ import ChatList from './components/ChatList';
 import InstallPrompt from './components/InstallPrompt';
 import UserProfileModal from './components/UserProfileModal';
 import SplashScreen from './components/SplashScreen';
+import PrivacyPolicy from './components/PrivacyPolicy';
+import TermsOfUse from './components/TermsOfUse';
 import { Ghost, PenSquare, Flame, Clock, Filter, LogIn, MessageSquare, LogOut, User, Search, X, Trophy, Home, Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -88,6 +90,10 @@ export default function App() {
   const [searchedUsers, setSearchedUsers] = useState<UserProfile[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [showSplash, setShowSplash] = useState(true);
+  const [feedLimit, setFeedLimit] = useState(20);
+  const [hasMore, setHasMore] = useState(true);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -95,6 +101,28 @@ export default function App() {
     }, 2000);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    // Handle URL parameters for Play Store links and shortcuts
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('privacy') === 'true') {
+      setShowPrivacy(true);
+    }
+    if (params.get('terms') === 'true') {
+      setShowTerms(true);
+    }
+    if (params.get('action') === 'post') {
+      setShowCreate(true);
+    }
+    if (params.get('tab') === 'trending') {
+      setSortBy('popular');
+    }
+  }, []);
+
+  useEffect(() => {
+    // Reset feed limit when filters change
+    setFeedLimit(20);
+  }, [sortBy, selectedCategory]);
 
   useEffect(() => {
     viewingState.current = { showChats, activeChatId };
@@ -241,19 +269,19 @@ export default function App() {
       finalQuery = query(
         collection(db, 'confessions'), 
         where('category', '==', selectedCategory), 
-        limit(100)
+        limit(feedLimit)
       );
     } else if (sortBy === 'popular' || sortBy === 'top_week') {
       finalQuery = query(
         collection(db, 'confessions'), 
         orderBy('likes', 'desc'), 
-        limit(100)
+        limit(feedLimit)
       );
     } else {
       finalQuery = query(
         collection(db, 'confessions'), 
         orderBy('createdAt', 'desc'), 
-        limit(50)
+        limit(feedLimit)
       );
     }
 
@@ -262,6 +290,9 @@ export default function App() {
         id: doc.id,
         ...doc.data()
       })) as Confession[];
+
+      // Check if we have more items to load
+      setHasMore(snapshot.docs.length === feedLimit);
 
       // If category is selected, we need to sort in JS since we couldn't use orderBy in the query
       if (selectedCategory) {
@@ -511,11 +542,24 @@ export default function App() {
                   <p className="text-zinc-500 mt-1">Tente pesquisar com outras palavras.</p>
                 </div>
               ) : (
-                confessions
-                  .filter(c => c.text.toLowerCase().includes(searchQuery.toLowerCase()))
-                  .map(confession => (
-                    <ConfessionCard key={confession.id} confession={confession} />
-                  ))
+                <>
+                  {confessions
+                    .filter(c => c.text.toLowerCase().includes(searchQuery.toLowerCase()))
+                    .map(confession => (
+                      <ConfessionCard key={confession.id} confession={confession} />
+                    ))}
+                  
+                  {hasMore && !searchQuery.trim() && (
+                    <div className="pt-4 pb-8 flex justify-center">
+                      <button
+                        onClick={() => setFeedLimit(prev => prev + 20)}
+                        className="px-6 py-2.5 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 rounded-full text-sm font-medium transition-colors"
+                      >
+                        Carregar mais
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </>
@@ -527,6 +571,8 @@ export default function App() {
         {needsNickname && <NicknameModal onComplete={() => setNeedsNickname(false)} />}
         {showMyProfile && user && <UserProfileModal userId={user.uid} onClose={() => setShowMyProfile(false)} />}
         {selectedUserId && <UserProfileModal userId={selectedUserId} onClose={() => setSelectedUserId(null)} />}
+        {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
+        {showTerms && <TermsOfUse onClose={() => setShowTerms(false)} />}
         
         {toast && (
           <motion.div

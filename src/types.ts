@@ -1,3 +1,5 @@
+import { Timestamp } from 'firebase/firestore';
+
 export interface Confession {
   id: string;
   text: string;
@@ -7,7 +9,7 @@ export interface Confession {
   likes: number;
   commentCount: number;
   judgement?: { right: number, wrong: number };
-  createdAt: any; // Firestore Timestamp
+  createdAt: Timestamp | any; // Firestore Timestamp or FieldValue during creation
   authorId: string;
 }
 
@@ -16,15 +18,15 @@ export interface Comment {
   confessionId: string;
   text: string;
   likes?: number;
-  createdAt: any; // Firestore Timestamp
+  createdAt: Timestamp | any;
   authorId: string;
 }
 
 export interface UserProfile {
   id: string;
   nickname: string;
-  createdAt: any;
-  lastActive?: any;
+  createdAt: Timestamp | any;
+  lastActive?: Timestamp | any;
   gender?: string;
   maritalStatus?: string;
   bio?: string;
@@ -34,9 +36,9 @@ export interface UserProfile {
 export interface Chat {
   id: string;
   participants: string[];
-  expiresAt: any;
+  expiresAt: Timestamp | any;
   durationMode: '1h' | '24h';
-  updatedAt: any;
+  updatedAt: Timestamp | any;
   unreadCount?: Record<string, number>;
   lastMessage?: string;
 }
@@ -45,7 +47,7 @@ export interface ChatMessage {
   id: string;
   senderId: string;
   text: string;
-  createdAt: any;
+  createdAt: Timestamp | any;
   isSystem: boolean;
 }
 

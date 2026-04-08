@@ -9,6 +9,7 @@ import UserProfileModal from './UserProfileModal';
 import { AnimatePresence } from 'motion/react';
 import { containsProfanity, filterProfanity } from '../lib/filter';
 import { cn } from '../lib/utils';
+import { getUserProfile } from '../lib/userCache';
 
 function CommentItem({ comment, isBestComment }: { comment: Comment, isBestComment?: boolean }) {
   const [authorNickname, setAuthorNickname] = useState<string>('Carregando...');
@@ -19,9 +20,9 @@ function CommentItem({ comment, isBestComment }: { comment: Comment, isBestComme
   useEffect(() => {
     const fetchAuthor = async () => {
       try {
-        const userDoc = await getDoc(doc(db, 'users', comment.authorId));
-        if (userDoc.exists()) {
-          setAuthorNickname(userDoc.data().nickname);
+        const userProfile = await getUserProfile(comment.authorId);
+        if (userProfile) {
+          setAuthorNickname(userProfile.nickname);
         } else {
           setAuthorNickname('Usuário Anônimo');
         }
