@@ -6,6 +6,7 @@ export interface Confession {
   gender?: string;
   likes: number;
   commentCount: number;
+  judgement?: { right: number, wrong: number };
   createdAt: any; // Firestore Timestamp
   authorId: string;
 }
@@ -14,6 +15,7 @@ export interface Comment {
   id: string;
   confessionId: string;
   text: string;
+  likes?: number;
   createdAt: any; // Firestore Timestamp
   authorId: string;
 }

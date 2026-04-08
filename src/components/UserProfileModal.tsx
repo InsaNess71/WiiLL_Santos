@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { X, MessageSquare, User, Edit2, Save } from 'lucide-react';
+import { X, MessageSquare, User, Edit2, Save, FileText, Shield } from 'lucide-react';
 import { db, auth } from '../firebase';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
 import { Confession, UserProfile, AVATARS } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import PrivacyPolicy from './PrivacyPolicy';
+import TermsOfUse from './TermsOfUse';
 
 interface UserProfileModalProps {
   userId: string;
@@ -17,6 +19,8 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
   const [confessions, setConfessions] = useState<Confession[]>([]);
   const [loading, setLoading] = useState(true);
   const [startingChat, setStartingChat] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
   
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
@@ -330,7 +334,7 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
               ) : confessions.length === 0 ? (
                 <div className="text-center py-8 text-zinc-500">Nenhuma confissão ainda.</div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-4 mb-8">
                   {confessions.map(conf => (
                     <div key={conf.id} className="bg-zinc-950 p-4 rounded-xl border border-zinc-800/50">
                       <div className="flex items-center justify-between mb-2">
@@ -344,10 +348,36 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
                   ))}
                 </div>
               )}
+
+              {isMe && (
+                <div className="border-t border-zinc-800 pt-6 mt-6 space-y-3">
+                  <button 
+                    onClick={() => setShowTerms(true)}
+                    className="w-full flex items-center justify-between p-3 rounded-xl bg-zinc-950 border border-zinc-800 hover:bg-zinc-800 transition-colors text-zinc-300"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <FileText className="w-5 h-5 text-zinc-500" />
+                      <span className="text-sm font-medium">Termos de Uso</span>
+                    </div>
+                  </button>
+                  <button 
+                    onClick={() => setShowPrivacy(true)}
+                    className="w-full flex items-center justify-between p-3 rounded-xl bg-zinc-950 border border-zinc-800 hover:bg-zinc-800 transition-colors text-zinc-300"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Shield className="w-5 h-5 text-zinc-500" />
+                      <span className="text-sm font-medium">Política de Privacidade</span>
+                    </div>
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
       </motion.div>
+
+      {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
+      {showTerms && <TermsOfUse onClose={() => setShowTerms(false)} />}
     </div>
   );
 }

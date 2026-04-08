@@ -4,6 +4,7 @@ import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Send, X, ShieldAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { containsProfanity, filterProfanity } from '../lib/filter';
 
 interface CreateConfessionProps {
   onClose: () => void;
@@ -21,15 +22,23 @@ export default function CreateConfession({ onClose }: CreateConfessionProps) {
     e.preventDefault();
     if (!text.trim() || !auth.currentUser) return;
 
+    if (containsProfanity(text)) {
+      setError('Sua confissão contém palavras impróprias. Por favor, revise o texto.');
+      return;
+    }
+
     setIsSubmitting(true);
     setError('');
 
     try {
+      const filteredText = filterProfanity(text.trim());
+      
       const confessionData: any = {
-        text: text.trim(),
+        text: filteredText,
         category,
         likes: 0,
         commentCount: 0,
+        judgement: { right: 0, wrong: 0 },
         createdAt: serverTimestamp(),
         authorId: auth.currentUser.uid
       };

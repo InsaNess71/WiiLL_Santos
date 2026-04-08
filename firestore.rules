@@ -11,6 +11,10 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function getJudgementVal(data, key) {
+      return ('judgement' in data && key in data.judgement) ? data.judgement[key] : 0;
+    }
+
     function isValidConfession() {
       let data = request.resource.data;
       return data.text is string && data.text.size() > 0 && data.text.size() <= 2000 &&
@@ -19,6 +23,9 @@ service cloud.firestore {
              (!('gender' in data) || (data.gender is string && data.gender.size() <= 50)) &&
              data.likes is number &&
              data.commentCount is number &&
+             (!('judgement' in data) || (data.judgement is map && 
+               (!('right' in data.judgement) || data.judgement.right is number) && 
+               (!('wrong' in data.judgement) || data.judgement.wrong is number))) &&
              data.createdAt is timestamp &&
              data.authorId is string && data.authorId == request.auth.uid;
     }
@@ -27,6 +34,7 @@ service cloud.firestore {
       let data = request.resource.data;
       return data.confessionId is string &&
              data.text is string && data.text.size() > 0 && data.text.size() <= 1000 &&
+             (!('likes' in data) || data.likes is number) &&
              data.createdAt is timestamp &&
              data.authorId is string && data.authorId == request.auth.uid;
     }
@@ -87,18 +95,27 @@ service cloud.firestore {
                     request.resource.data.likes == 0 && 
                     request.resource.data.commentCount == 0;
                     
-      // Updates are only allowed for likes and commentCount
+      // Updates are only allowed for likes, commentCount, and judgement
       allow update: if isAuthenticated() &&
-                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'commentCount']) &&
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'commentCount', 'judgement']) &&
                     // Likes can only change by 1 or -1
                     (
-                      (request.resource.data.likes == resource.data.likes + 1 || request.resource.data.likes == resource.data.likes - 1) ||
-                      (request.resource.data.likes == resource.data.likes)
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['likes']) ||
+                      request.resource.data.likes == resource.data.likes + 1 || 
+                      request.resource.data.likes == resource.data.likes - 1
                     ) &&
                     // Comment count can only increase by 1
                     (
-                      request.resource.data.commentCount == resource.data.commentCount + 1 ||
-                      request.resource.data.commentCount == resource.data.commentCount
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['commentCount']) ||
+                      request.resource.data.commentCount == resource.data.commentCount + 1
+                    ) &&
+                    // Judgement can only change by 1 or -1
+                    (
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['judgement']) ||
+                      (
+                        (getJudgementVal(request.resource.data, 'right') == getJudgementVal(resource.data, 'right') + 1 || getJudgementVal(request.resource.data, 'right') == getJudgementVal(resource.data, 'right') - 1 || getJudgementVal(request.resource.data, 'right') == getJudgementVal(resource.data, 'right')) &&
+                        (getJudgementVal(request.resource.data, 'wrong') == getJudgementVal(resource.data, 'wrong') + 1 || getJudgementVal(request.resource.data, 'wrong') == getJudgementVal(resource.data, 'wrong') - 1 || getJudgementVal(request.resource.data, 'wrong') == getJudgementVal(resource.data, 'wrong'))
+                      )
                     );
                     
       allow delete: if isOwner(resource.data.authorId);
@@ -108,12 +125,35 @@ service cloud.firestore {
         allow create: if isOwner(userId) && request.resource.data.createdAt is timestamp;
         allow delete: if isOwner(userId);
       }
+
+      match /judgements/{userId} {
+        allow read: if true;
+        allow create, update: if isOwner(userId) && request.resource.data.vote in ['right', 'wrong'] && request.resource.data.createdAt is timestamp;
+      }
     }
 
     match /comments/{commentId} {
       allow read: if true;
-      allow create: if isAuthenticated() && isValidComment();
+      allow create: if isAuthenticated() && isValidComment() && (!('likes' in request.resource.data) || request.resource.data.likes == 0);
+      allow update: if isAuthenticated() &&
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']) &&
+                    (request.resource.data.likes == resource.data.likes + 1 || request.resource.data.likes == resource.data.likes - 1);
       allow delete: if isOwner(resource.data.authorId);
+
+      match /likes/{userId} {
+        allow read: if true;
+        allow create: if isOwner(userId) && request.resource.data.createdAt is timestamp;
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    match /reports/{reportId} {
+      allow create: if isAuthenticated() &&
+                    request.resource.data.confessionId is string &&
+                    request.resource.data.reportedBy == request.auth.uid &&
+                    request.resource.data.reason is string &&
+                    request.resource.data.status == 'pending' &&
+                    request.resource.data.createdAt is timestamp;
     }
   }
 }

@@ -9,10 +9,11 @@ import NicknameModal from './components/NicknameModal';
 import ChatList from './components/ChatList';
 import InstallPrompt from './components/InstallPrompt';
 import UserProfileModal from './components/UserProfileModal';
-import { Ghost, PenSquare, Flame, Clock, Filter, LogIn, MessageSquare, LogOut, User, Search, X } from 'lucide-react';
+import SplashScreen from './components/SplashScreen';
+import { Ghost, PenSquare, Flame, Clock, Filter, LogIn, MessageSquare, LogOut, User, Search, X, Trophy, Home, Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-type SortOption = 'recent' | 'popular';
+type SortOption = 'recent' | 'popular' | 'top_week';
 
 let audioCtx: AudioContext | null = null;
 
@@ -86,6 +87,14 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchedUsers, setSearchedUsers] = useState<UserProfile[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     viewingState.current = { showChats, activeChatId };
@@ -234,11 +243,11 @@ export default function App() {
         where('category', '==', selectedCategory), 
         limit(100)
       );
-    } else if (sortBy === 'popular') {
+    } else if (sortBy === 'popular' || sortBy === 'top_week') {
       finalQuery = query(
         collection(db, 'confessions'), 
         orderBy('likes', 'desc'), 
-        limit(50)
+        limit(100)
       );
     } else {
       finalQuery = query(
@@ -257,13 +266,23 @@ export default function App() {
       // If category is selected, we need to sort in JS since we couldn't use orderBy in the query
       if (selectedCategory) {
         data.sort((a, b) => {
-          if (sortBy === 'popular') {
+          if (sortBy === 'popular' || sortBy === 'top_week') {
             return (b.likes || 0) - (a.likes || 0);
           } else {
             const timeA = a.createdAt?.toDate?.()?.getTime() || 0;
             const timeB = b.createdAt?.toDate?.()?.getTime() || 0;
             return timeB - timeA;
           }
+        });
+      }
+
+      // Filter for top_week
+      if (sortBy === 'top_week') {
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        data = data.filter(c => {
+          const createdAt = c.createdAt?.toDate?.();
+          return createdAt && createdAt >= oneWeekAgo;
         });
       }
 
@@ -286,6 +305,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-pink-500/30">
+      <AnimatePresence>
+        {showSplash && <SplashScreen />}
+      </AnimatePresence>
+
       {/* Header */}
       <header className="sticky top-0 z-40 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between relative">
@@ -405,20 +428,27 @@ export default function App() {
             {/* Filters & Categories */}
             <div className="mb-8 space-y-4">
               <div className="flex items-center justify-between">
-                <div className="flex space-x-2 bg-zinc-900 p-1 rounded-lg border border-zinc-800 shrink-0">
+                <div className="flex space-x-2 bg-zinc-900 p-1 rounded-lg border border-zinc-800 shrink-0 overflow-x-auto custom-scrollbar">
                   <button
                     onClick={() => setSortBy('recent')}
-                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${sortBy === 'recent' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${sortBy === 'recent' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
                   >
                     <Clock className="w-4 h-4" />
                     <span>Recentes</span>
                   </button>
                   <button
                     onClick={() => setSortBy('popular')}
-                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${sortBy === 'popular' ? 'bg-zinc-800 text-pink-400' : 'text-zinc-400 hover:text-pink-400'}`}
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${sortBy === 'popular' ? 'bg-zinc-800 text-pink-400' : 'text-zinc-400 hover:text-pink-400'}`}
                   >
                     <Flame className="w-4 h-4" />
                     <span>Em Alta</span>
+                  </button>
+                  <button
+                    onClick={() => setSortBy('top_week')}
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${sortBy === 'top_week' ? 'bg-zinc-800 text-yellow-400' : 'text-zinc-400 hover:text-yellow-400'}`}
+                  >
+                    <Trophy className="w-4 h-4" />
+                    <span>Top Semana</span>
                   </button>
                 </div>
               </div>
@@ -522,6 +552,59 @@ export default function App() {
         )}
       </AnimatePresence>
       
+      {/* Bottom Menu for Mobile */}
+      {user && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/90 backdrop-blur-lg border-t border-zinc-800 sm:hidden pb-safe">
+          <div className="flex items-center justify-around p-3">
+            <button 
+              onClick={() => { setShowChats(false); setShowMyProfile(false); }}
+              className={`flex flex-col items-center space-y-1 ${!showChats && !showMyProfile ? 'text-pink-500' : 'text-zinc-500 hover:text-zinc-300'}`}
+            >
+              <Home className="w-6 h-6" />
+              <span className="text-[10px] font-medium">Feed</span>
+            </button>
+            <button 
+              onClick={() => setShowCreate(true)}
+              className="flex flex-col items-center space-y-1 text-zinc-500 hover:text-zinc-300 relative -top-4"
+            >
+              <div className="bg-pink-600 text-white p-3 rounded-full shadow-lg shadow-pink-500/30">
+                <PenSquare className="w-6 h-6" />
+              </div>
+            </button>
+            <button 
+              onClick={handleChatClick}
+              className={`flex flex-col items-center space-y-1 relative ${showChats ? 'text-pink-500' : 'text-zinc-500 hover:text-zinc-300'}`}
+            >
+              <div className="relative">
+                <Bell className="w-6 h-6" />
+                {totalUnread > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-pink-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
+                    {totalUnread > 99 ? '99+' : totalUnread}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] font-medium">Notificações</span>
+            </button>
+            <button 
+              onClick={() => setShowMyProfile(true)}
+              className={`flex flex-col items-center space-y-1 ${showMyProfile ? 'text-pink-500' : 'text-zinc-500 hover:text-zinc-300'}`}
+            >
+              <User className="w-6 h-6" />
+              <span className="text-[10px] font-medium">Perfil</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Add padding to bottom of main content on mobile to account for bottom menu */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @media (max-width: 640px) {
+          main {
+            padding-bottom: 5rem !important;
+          }
+        }
+      `}} />
+
       <InstallPrompt />
     </div>
   );

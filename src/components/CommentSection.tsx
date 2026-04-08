@@ -2,15 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, getDoc, writeBatch } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Comment } from '../types';
-import { Send, User } from 'lucide-react';
+import { Send, User, ShieldAlert, Heart, Trophy } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import UserProfileModal from './UserProfileModal';
 import { AnimatePresence } from 'motion/react';
+import { containsProfanity, filterProfanity } from '../lib/filter';
+import { cn } from '../lib/utils';
 
-function CommentItem({ comment }: { comment: Comment }) {
+function CommentItem({ comment, isBestComment }: { comment: Comment, isBestComment?: boolean }) {
   const [authorNickname, setAuthorNickname] = useState<string>('Carregando...');
   const [showProfile, setShowProfile] = useState(false);
+  const [isLiked, setIsLiked] = useState(false);
+  const [likeLoading, setLikeLoading] = useState(false);
 
   useEffect(() => {
     const fetchAuthor = async () => {
@@ -29,8 +33,54 @@ function CommentItem({ comment }: { comment: Comment }) {
     fetchAuthor();
   }, [comment.authorId]);
 
+  useEffect(() => {
+    const checkLike = async () => {
+      if (!auth.currentUser) return;
+      const likeRef = doc(db, 'comments', comment.id, 'likes', auth.currentUser.uid);
+      const likeSnap = await getDoc(likeRef);
+      setIsLiked(likeSnap.exists());
+    };
+    checkLike();
+  }, [comment.id]);
+
+  const handleLike = async () => {
+    if (!auth.currentUser || likeLoading) return;
+    setLikeLoading(true);
+    
+    const likeRef = doc(db, 'comments', comment.id, 'likes', auth.currentUser.uid);
+    const commentRef = doc(db, 'comments', comment.id);
+
+    try {
+      const batch = writeBatch(db);
+      if (isLiked) {
+        batch.delete(likeRef);
+        batch.update(commentRef, { likes: increment(-1) });
+        await batch.commit();
+        setIsLiked(false);
+      } else {
+        batch.set(likeRef, { createdAt: serverTimestamp() });
+        batch.update(commentRef, { likes: increment(1) });
+        await batch.commit();
+        setIsLiked(true);
+      }
+    } catch (error) {
+      console.error("Error toggling like:", error);
+    } finally {
+      setLikeLoading(false);
+    }
+  };
+
   return (
-    <div className="bg-zinc-800/50 rounded-lg p-3">
+    <div className={cn(
+      "rounded-lg p-3 relative",
+      isBestComment ? "bg-yellow-500/10 border border-yellow-500/30" : "bg-zinc-800/50"
+    )}>
+      {isBestComment && (
+        <div className="absolute -top-2 -right-2 bg-yellow-500 text-zinc-900 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center space-x-1 shadow-lg shadow-yellow-500/20">
+          <Trophy className="w-3 h-3" />
+          <span>Melhor Comentário</span>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-1">
         <button 
           onClick={() => setShowProfile(true)}
@@ -45,7 +95,21 @@ function CommentItem({ comment }: { comment: Comment }) {
           {comment.createdAt?.toDate ? formatDistanceToNow(comment.createdAt.toDate(), { addSuffix: true, locale: ptBR }) : 'agora'}
         </span>
       </div>
-      <p className="text-zinc-300 text-sm ml-6">{comment.text}</p>
+      <p className="text-zinc-300 text-sm ml-6 mb-2">{comment.text}</p>
+      
+      <div className="flex items-center justify-end">
+        <button 
+          onClick={handleLike}
+          disabled={likeLoading}
+          className={cn(
+            "flex items-center space-x-1 text-xs transition-colors",
+            isLiked ? "text-pink-500" : "text-zinc-500 hover:text-pink-400"
+          )}
+        >
+          <Heart className={cn("w-3.5 h-3.5", isLiked && "fill-current")} />
+          <span>{comment.likes || 0}</span>
+        </button>
+      </div>
 
       <AnimatePresence>
         {showProfile && (
@@ -63,6 +127,7 @@ export default function CommentSection({ confessionId }: { confessionId: string 
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const q = query(
@@ -78,9 +143,16 @@ export default function CommentSection({ confessionId }: { confessionId: string 
       
       // Sort in JS to avoid composite index requirements
       commentsData.sort((a, b) => {
+        // First sort by likes (descending)
+        const likesA = a.likes || 0;
+        const likesB = b.likes || 0;
+        if (likesB !== likesA) {
+          return likesB - likesA;
+        }
+        // Then sort by date (ascending)
         const timeA = a.createdAt?.toDate?.()?.getTime() || 0;
         const timeB = b.createdAt?.toDate?.()?.getTime() || 0;
-        return timeA - timeB; // asc
+        return timeA - timeB;
       });
       
       setComments(commentsData);
@@ -89,18 +161,27 @@ export default function CommentSection({ confessionId }: { confessionId: string 
     return () => unsubscribe();
   }, [confessionId]);
 
+  const bestCommentId = comments.length > 0 && (comments[0].likes || 0) > 0 ? comments[0].id : null;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newComment.trim() || !auth.currentUser || isSubmitting) return;
 
+    if (containsProfanity(newComment)) {
+      setError('Seu comentário contém palavras impróprias.');
+      return;
+    }
+
     setIsSubmitting(true);
+    setError('');
     try {
+      const filteredText = filterProfanity(newComment.trim());
       const batch = writeBatch(db);
       
       const newCommentRef = doc(collection(db, 'comments'));
       batch.set(newCommentRef, {
         confessionId,
-        text: newComment.trim(),
+        text: filteredText,
         createdAt: serverTimestamp(),
         authorId: auth.currentUser.uid
       });
@@ -115,6 +196,7 @@ export default function CommentSection({ confessionId }: { confessionId: string 
       setNewComment('');
     } catch (error) {
       console.error("Error adding comment:", error);
+      setError('Erro ao enviar comentário.');
     } finally {
       setIsSubmitting(false);
     }
@@ -122,12 +204,22 @@ export default function CommentSection({ confessionId }: { confessionId: string 
 
   return (
     <div className="space-y-4">
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2 flex items-center space-x-2 text-red-400">
+          <ShieldAlert className="w-4 h-4 shrink-0" />
+          <p className="text-xs">{error}</p>
+        </div>
+      )}
       <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
         {comments.length === 0 ? (
           <p className="text-zinc-500 text-sm text-center py-2">Nenhum comentário ainda. Seja o primeiro!</p>
         ) : (
           comments.map(comment => (
-            <CommentItem key={comment.id} comment={comment} />
+            <CommentItem 
+              key={comment.id} 
+              comment={comment} 
+              isBestComment={comment.id === bestCommentId}
+            />
           ))
         )}
       </div>

@@ -25,15 +25,26 @@ export default function ConfessionCard({ confession }: ConfessionCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isReporting, setIsReporting] = useState(false);
   const [hasReported, setHasReported] = useState(false);
+  const [userJudgement, setUserJudgement] = useState<'right' | 'wrong' | null>(null);
+  const [judgementLoading, setJudgementLoading] = useState(false);
 
   useEffect(() => {
-    const checkLike = async () => {
+    const checkInteractions = async () => {
       if (!auth.currentUser) return;
+      
+      // Check like
       const likeRef = doc(db, 'confessions', confession.id, 'likes', auth.currentUser.uid);
       const likeSnap = await getDoc(likeRef);
       setIsLiked(likeSnap.exists());
+
+      // Check judgement
+      const judgementRef = doc(db, 'confessions', confession.id, 'judgements', auth.currentUser.uid);
+      const judgementSnap = await getDoc(judgementRef);
+      if (judgementSnap.exists()) {
+        setUserJudgement(judgementSnap.data().vote);
+      }
     };
-    checkLike();
+    checkInteractions();
   }, [confession.id]);
 
   useEffect(() => {
@@ -81,6 +92,40 @@ export default function ConfessionCard({ confession }: ConfessionCardProps) {
     }
   };
 
+  const handleJudgement = async (vote: 'right' | 'wrong') => {
+    if (!auth.currentUser || judgementLoading) return;
+    if (userJudgement === vote) return; // Already voted this
+    
+    setJudgementLoading(true);
+    const judgementRef = doc(db, 'confessions', confession.id, 'judgements', auth.currentUser.uid);
+    const confessionRef = doc(db, 'confessions', confession.id);
+
+    try {
+      const batch = writeBatch(db);
+      
+      // If changing vote
+      if (userJudgement) {
+        batch.update(confessionRef, { 
+          [`judgement.${userJudgement}`]: increment(-1),
+          [`judgement.${vote}`]: increment(1)
+        });
+      } else {
+        // New vote
+        batch.update(confessionRef, { 
+          [`judgement.${vote}`]: increment(1)
+        });
+      }
+      
+      batch.set(judgementRef, { vote, createdAt: serverTimestamp() });
+      await batch.commit();
+      setUserJudgement(vote);
+    } catch (error) {
+      console.error("Error voting:", error);
+    } finally {
+      setJudgementLoading(false);
+    }
+  };
+
   const handleShare = async () => {
     const shareText = `Confissão de ${authorNickname}: "${confession.text}"\n\nLeia mais no app!`;
     if (navigator.share) {
@@ -117,17 +162,30 @@ export default function ConfessionCard({ confession }: ConfessionCardProps) {
     }
   };
 
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+
+  const REPORT_REASONS = [
+    'Conteúdo ofensivo ou discurso de ódio',
+    'Spam ou propaganda',
+    'Conteúdo sexualmente explícito',
+    'Incentivo à violência ou automutilação',
+    'Assédio ou bullying'
+  ];
+
   const handleReport = async () => {
-    if (!auth.currentUser || hasReported || isReporting) return;
+    if (!auth.currentUser || hasReported || isReporting || !reportReason) return;
     setIsReporting(true);
     try {
       await addDoc(collection(db, 'reports'), {
         confessionId: confession.id,
         reportedBy: auth.currentUser.uid,
+        reason: reportReason,
         createdAt: serverTimestamp(),
         status: 'pending'
       });
       setHasReported(true);
+      setShowReportModal(false);
       const btn = document.getElementById(`report-btn-${confession.id}`);
       if (btn) {
         btn.innerHTML = '<span class="text-xs text-red-500">Denunciado</span>';
@@ -192,6 +250,46 @@ export default function ConfessionCard({ confession }: ConfessionCardProps) {
         "{confession.text}"
       </p>
 
+      <div className="bg-zinc-950/50 rounded-xl p-3 mb-4 border border-zinc-800/50">
+        <p className="text-xs text-zinc-400 font-medium mb-2 text-center uppercase tracking-wider">Você acha isso:</p>
+        <div className="flex items-center justify-center space-x-3">
+          <button
+            onClick={() => handleJudgement('right')}
+            disabled={judgementLoading}
+            className={cn(
+              "flex-1 py-2 px-3 rounded-lg flex items-center justify-center space-x-2 text-sm font-medium transition-all",
+              userJudgement === 'right' 
+                ? "bg-green-500/20 text-green-400 border border-green-500/30" 
+                : "bg-zinc-900 text-zinc-400 border border-zinc-800 hover:bg-zinc-800 hover:text-green-400"
+            )}
+          >
+            <span>✔️ Certo</span>
+            {confession.judgement?.right !== undefined && (
+              <span className="bg-zinc-950 px-1.5 py-0.5 rounded text-xs opacity-80">
+                {confession.judgement.right + (userJudgement === 'right' && !judgementLoading ? 0 : 0)}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => handleJudgement('wrong')}
+            disabled={judgementLoading}
+            className={cn(
+              "flex-1 py-2 px-3 rounded-lg flex items-center justify-center space-x-2 text-sm font-medium transition-all",
+              userJudgement === 'wrong' 
+                ? "bg-red-500/20 text-red-400 border border-red-500/30" 
+                : "bg-zinc-900 text-zinc-400 border border-zinc-800 hover:bg-zinc-800 hover:text-red-400"
+            )}
+          >
+            <span>❌ Errado</span>
+            {confession.judgement?.wrong !== undefined && (
+              <span className="bg-zinc-950 px-1.5 py-0.5 rounded text-xs opacity-80">
+                {confession.judgement.wrong + (userJudgement === 'wrong' && !judgementLoading ? 0 : 0)}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between border-t border-zinc-800 pt-4">
         <div className="flex space-x-4">
           <button 
@@ -228,7 +326,7 @@ export default function ConfessionCard({ confession }: ConfessionCardProps) {
           {!isOwner && (
             <button 
               id={`report-btn-${confession.id}`}
-              onClick={handleReport}
+              onClick={() => setShowReportModal(true)}
               disabled={hasReported || isReporting}
               className="flex items-center space-x-1.5 text-sm text-zinc-400 hover:text-red-400 transition-colors disabled:opacity-50"
               title="Denunciar"
@@ -280,6 +378,59 @@ export default function ConfessionCard({ confession }: ConfessionCardProps) {
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   'Excluir'
+                )}
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {showReportModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-10 bg-zinc-900/95 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center p-6"
+          >
+            <Flag className="w-8 h-8 text-red-500 mb-3" />
+            <h3 className="text-lg font-bold text-zinc-100 mb-4">Denunciar Confissão</h3>
+            
+            <div className="w-full max-w-xs space-y-2 mb-6">
+              {REPORT_REASONS.map((reason) => (
+                <button
+                  key={reason}
+                  onClick={() => setReportReason(reason)}
+                  className={cn(
+                    "w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-colors border",
+                    reportReason === reason 
+                      ? "bg-red-500/20 border-red-500/50 text-red-400" 
+                      : "bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700"
+                  )}
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center space-x-3 w-full max-w-xs">
+              <button
+                onClick={() => {
+                  setShowReportModal(false);
+                  setReportReason('');
+                }}
+                disabled={isReporting}
+                className="flex-1 py-2.5 rounded-xl font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleReport}
+                disabled={isReporting || !reportReason}
+                className="flex-1 py-2.5 rounded-xl font-medium text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center"
+              >
+                {isReporting ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  'Enviar'
                 )}
               </button>
             </div>
