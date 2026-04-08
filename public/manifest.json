@@ -1,11 +1,18 @@
 {
+  "id": "/?source=pwa",
   "name": "Confissões Anônimas",
   "short_name": "Confissões",
-  "description": "Desabafe e conte segredos sem revelar sua identidade.",
-  "start_url": "/",
+  "description": "Um espaço seguro para desabafar, contar segredos e histórias sem revelar sua identidade. Interaja, comente e julgue anonimamente.",
+  "start_url": "/?source=pwa",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#09090b",
   "theme_color": "#09090b",
+  "orientation": "portrait-primary",
+  "dir": "ltr",
+  "lang": "pt-BR",
+  "categories": ["social", "entertainment", "lifestyle"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icon-192.png",
@@ -14,10 +21,38 @@
       "purpose": "any"
     },
     {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nova Confissão",
+      "short_name": "Postar",
+      "description": "Escreva uma nova confissão anônima",
+      "url": "/?action=post",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Em Alta",
+      "short_name": "Em Alta",
+      "description": "Veja as confissões mais populares",
+      "url": "/?tab=trending",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
