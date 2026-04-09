@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, limit, where, getDoc, getDocs, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db, auth, signInAnonymouslyUser, signInWithGoogle, logOut, messaging } from './firebase';
+import { db, auth, signInAnonymouslyUser, signInWithGoogle, logOut, getMessagingInstance } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getToken, onMessage } from 'firebase/messaging';
 import { Confession, CATEGORIES, Chat, UserProfile } from './types';
@@ -177,19 +177,21 @@ export default function App() {
           }
 
           // Request FCM Token for Push Notifications
-          if (messaging && 'Notification' in window) {
+          if ('Notification' in window) {
             try {
-              const permission = await Notification.requestPermission();
-              if (permission === 'granted') {
-                // TODO: Substitua 'BLwRpDenfvtAIFYVYCRAYM7tSZvpmnqqHmXl3qfeoaNadCo-LKgn33vHq0qJg7QHxBUc4zRKosfV_R8fD1k83lU' pela chave gerada no Console do Firebase
-                const token = await getToken(messaging, {
-                  vapidKey: 'BLwRpDenfvtAIFYVYCRAYM7tSZvpmnqqHmXl3qfeoaNadCo-LKgn33vHq0qJg7QHxBUc4zRKosfV_R8fD1k83lU' 
-                });
-                
-                if (token) {
-                  await updateDoc(doc(db, 'users', currentUser.uid), {
-                    fcmToken: token
+              const messaging = await getMessagingInstance();
+              if (messaging) {
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                  const token = await getToken(messaging, {
+                    vapidKey: 'BLwRpDenfvtAIFYVYCRAYM7tSZvpmnqqHmXl3qfeoaNadCo-LKgn33vHq0qJg7QHxBUc4zRKosfV_R8fD1k83lU' 
                   });
+                  
+                  if (token) {
+                    await updateDoc(doc(db, 'users', currentUser.uid), {
+                      fcmToken: token
+                    });
+                  }
                 }
               }
             } catch (err) {
@@ -209,16 +211,31 @@ export default function App() {
 
   // Listen for foreground messages
   useEffect(() => {
-    if (!messaging) return;
-    const unsubscribe = onMessage(messaging, (payload) => {
-      setToast({ 
-        id: Date.now(), 
-        title: payload.notification?.title || 'Nova Notificação', 
-        message: payload.notification?.body || 'Você tem uma nova mensagem.' 
-      });
-      playNotificationSound();
-    });
-    return () => unsubscribe();
+    let unsubscribe: any;
+    
+    const setupMessaging = async () => {
+      try {
+        const messaging = await getMessagingInstance();
+        if (!messaging) return;
+        
+        unsubscribe = onMessage(messaging, (payload) => {
+          setToast({ 
+            id: Date.now(), 
+            title: payload.notification?.title || 'Nova Notificação', 
+            message: payload.notification?.body || 'Você tem uma nova mensagem.' 
+          });
+          playNotificationSound();
+        });
+      } catch (err) {
+        console.error("Erro ao configurar listener de mensagens:", err);
+      }
+    };
+
+    setupMessaging();
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
   useEffect(() => {

@@ -5,13 +5,21 @@
   "description": "Um espaço seguro para desabafar, contar segredos e histórias sem revelar sua identidade. Interaja, comente e julgue anonimamente.",
   "start_url": "/?source=pwa",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
   "background_color": "#09090b",
   "theme_color": "#09090b",
   "orientation": "portrait-primary",
   "dir": "ltr",
   "lang": "pt-BR",
-  "categories": ["social", "entertainment", "lifestyle"],
+  "categories": [
+    "social",
+    "entertainment",
+    "lifestyle"
+  ],
   "prefer_related_applications": false,
   "icons": [
     {
@@ -45,14 +53,24 @@
       "short_name": "Postar",
       "description": "Escreva uma nova confissão anônima",
       "url": "/?action=post",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Em Alta",
       "short_name": "Em Alta",
       "description": "Veja as confissões mais populares",
       "url": "/?tab=trending",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

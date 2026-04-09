@@ -18,13 +18,18 @@ enableIndexedDbPersistence(db).catch((err) => {
 
 export const auth = getAuth(app);
 
-// Initialize Firebase Cloud Messaging (FCM) conditionally
-export let messaging: any = null;
-isSupported().then((supported) => {
-  if (supported) {
-    messaging = getMessaging(app);
+// Initialize Firebase Cloud Messaging (FCM) safely
+export const getMessagingInstance = async () => {
+  try {
+    const supported = await isSupported();
+    if (supported) {
+      return getMessaging(app);
+    }
+  } catch (err) {
+    console.warn('Firebase Messaging is not supported in this browser.', err);
   }
-});
+  return null;
+};
 
 const googleProvider = new GoogleAuthProvider();
 
