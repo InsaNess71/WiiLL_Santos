@@ -61,16 +61,16 @@ export const CATEGORIES = [
 ];
 
 export const AVATARS = [
-  "https://api.dicebear.com/7.x/open-peeps/svg?seed=1&head=short1&backgroundColor=ffffff", // Menino
-  "https://api.dicebear.com/7.x/open-peeps/svg?seed=2&head=mediumStraight&backgroundColor=ffffff", // Menina
-  "https://api.dicebear.com/7.x/open-peeps/svg?seed=3&head=hatHipHop&backgroundColor=ffffff", // Menino de boné
-  "https://api.dicebear.com/7.x/open-peeps/svg?seed=4&head=winterHat1&backgroundColor=ffffff", // Menina de toca
-  "https://api.dicebear.com/7.x/open-peeps/svg?seed=5&head=bun&backgroundColor=ffffff", // Cabelo preso
-  "https://api.dicebear.com/7.x/open-peeps/svg?seed=6&head=short2&backgroundColor=ffffff", // Menino 2
-  "https://api.dicebear.com/7.x/open-peeps/svg?seed=7&head=short3&facialHair=beard&backgroundColor=ffffff", // Barba
-  "https://api.dicebear.com/7.x/open-peeps/svg?seed=8&head=dreads1&backgroundColor=ffffff", // Dreads
-  "https://api.dicebear.com/7.x/open-peeps/svg?seed=9&head=medium1&backgroundColor=ffffff", // Cacheado
-  "https://api.dicebear.com/7.x/open-peeps/svg?seed=10&head=hijab&backgroundColor=ffffff", // Hijab
-  "https://api.dicebear.com/7.x/open-peeps/svg?seed=11&head=turban&backgroundColor=ffffff", // Turbante
-  "https://api.dicebear.com/7.x/open-peeps/svg?seed=12&head=longBangs&backgroundColor=ffffff" // Franja
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Felix&backgroundColor=transparent", // Menino
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Aneka&backgroundColor=transparent", // Menina
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Jack&backgroundColor=transparent", // Menino estiloso
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Jocelyn&backgroundColor=transparent", // Menina de óculos
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Aidan&backgroundColor=transparent", // Menino sorrindo
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Sophia&backgroundColor=transparent", // Menina cabelo longo
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Brian&backgroundColor=transparent", // Menino com barba
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Liliana&backgroundColor=transparent", // Menina cabelo curto
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Christian&backgroundColor=transparent", // Menino sério
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Destiny&backgroundColor=transparent", // Menina cacheada
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Mason&backgroundColor=transparent", // Menino descolado
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Avery&backgroundColor=transparent" // Menina moderna
 ];
