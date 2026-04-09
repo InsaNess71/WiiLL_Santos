@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, getDoc, writeBatch } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Comment } from '../types';
@@ -11,7 +11,7 @@ import { containsProfanity, filterProfanity } from '../lib/filter';
 import { cn } from '../lib/utils';
 import { getUserProfile } from '../lib/userCache';
 
-function CommentItem({ comment, isBestComment }: { comment: Comment, isBestComment?: boolean }) {
+const CommentItem = memo(function CommentItem({ comment, isBestComment }: { comment: Comment, isBestComment?: boolean }) {
   const [authorNickname, setAuthorNickname] = useState<string>('Carregando...');
   const [showProfile, setShowProfile] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
@@ -122,7 +122,7 @@ function CommentItem({ comment, isBestComment }: { comment: Comment, isBestComme
       </AnimatePresence>
     </div>
   );
-}
+});
 
 export default function CommentSection({ confessionId }: { confessionId: string }) {
   const [comments, setComments] = useState<Comment[]>([]);

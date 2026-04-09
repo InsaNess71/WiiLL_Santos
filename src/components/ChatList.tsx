@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import { collection, query, where, onSnapshot, getDoc, doc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Chat, UserProfile } from '../types';
@@ -12,7 +12,7 @@ interface ChatListProps {
   setActiveChatId: (id: string | null) => void;
 }
 
-export default function ChatList({ activeChatId, setActiveChatId }: ChatListProps) {
+const ChatList = memo(function ChatList({ activeChatId, setActiveChatId }: ChatListProps) {
   const [chats, setChats] = useState<(Chat & { otherUser?: UserProfile })[]>([]);
   const [loading, setLoading] = useState(true);
   const userCache = useRef<Record<string, UserProfile>>({});
@@ -138,4 +138,6 @@ export default function ChatList({ activeChatId, setActiveChatId }: ChatListProp
       </div>
     </div>
   );
-}
+});
+
+export default ChatList;

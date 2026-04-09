@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { collection, query, orderBy, onSnapshot, limit, where, getDoc, getDocs, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth, signInAnonymouslyUser, signInWithGoogle, logOut, getMessagingInstance } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -377,6 +377,12 @@ export default function App() {
     return () => unsubscribe();
   }, [isAuthReady, sortBy, selectedCategory]);
 
+  const filteredConfessions = useMemo(() => {
+    if (!searchQuery.trim()) return confessions;
+    const lowerQuery = searchQuery.toLowerCase();
+    return confessions.filter(c => c.text.toLowerCase().includes(lowerQuery));
+  }, [confessions, searchQuery]);
+
   if (!isAuthReady) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
@@ -589,7 +595,7 @@ export default function App() {
 
               {searchQuery.trim() && <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-3">Confissões</h3>}
 
-              {confessions.filter(c => c.text.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
+              {filteredConfessions.length === 0 ? (
                 <div className="text-center py-20">
                   <Ghost className="w-12 h-12 text-zinc-800 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-zinc-400">Nenhuma confissão encontrada</h3>
@@ -597,9 +603,7 @@ export default function App() {
                 </div>
               ) : (
                 <>
-                  {confessions
-                    .filter(c => c.text.toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map(confession => (
+                  {filteredConfessions.map(confession => (
                       <ConfessionCard key={confession.id} confession={confession} />
                     ))}
                   

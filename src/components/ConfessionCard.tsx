@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { Confession } from '../types';
 import { Heart, MessageCircle, Share2, User, Trash2, AlertTriangle, Flag } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -15,7 +15,7 @@ interface ConfessionCardProps {
   confession: Confession;
 }
 
-export default function ConfessionCard({ confession }: ConfessionCardProps) {
+const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCardProps) {
   const [isLiked, setIsLiked] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [likeLoading, setLikeLoading] = useState(false);
@@ -440,4 +440,6 @@ export default function ConfessionCard({ confession }: ConfessionCardProps) {
       </AnimatePresence>
     </motion.div>
   );
-}
+});
+
+export default ConfessionCard;
