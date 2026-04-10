@@ -16,6 +16,7 @@ interface ReportData {
   confessionText?: string;
   authorId?: string;
   authorNickname?: string;
+  reporterNickname?: string;
 }
 
 interface AdminDashboardProps {
@@ -60,6 +61,16 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
           }
         } else {
           report.confessionText = '[Confissão já excluída]';
+        }
+
+        // Fetch reporter details
+        if (report.reportedBy) {
+          const reporterSnap = await getDoc(doc(db, 'users', report.reportedBy));
+          if (reporterSnap.exists()) {
+            report.reporterNickname = reporterSnap.data().nickname;
+          } else {
+            report.reporterNickname = 'Usuário Deletado';
+          }
         }
         
         reportsData.push(report);
@@ -184,7 +195,14 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                   
                   <div className="bg-zinc-950 p-4 rounded-lg border border-zinc-800/50 mb-4">
                     <p className="text-sm text-zinc-300 italic">"{report.confessionText}"</p>
-                    <p className="text-xs text-zinc-500 mt-2 text-right">- {report.authorNickname || 'Desconhecido'}</p>
+                    <div className="flex justify-between items-center mt-3 pt-3 border-t border-zinc-800/50">
+                      <p className="text-xs text-zinc-500">
+                        <span className="font-medium text-zinc-400">Denunciado por:</span> {report.reporterNickname || 'Desconhecido'}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        <span className="font-medium text-zinc-400">Autor:</span> {report.authorNickname || 'Desconhecido'}
+                      </p>
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap gap-2 justify-end pt-2 border-t border-zinc-800/50">
