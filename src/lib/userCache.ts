@@ -23,3 +23,16 @@ export const getUserProfile = (userId: string): Promise<UserProfile | null> => {
   }
   return userCache.get(userId)!;
 };
+
+export const updateUserCache = (userId: string, updatedData: Partial<UserProfile>) => {
+  if (userCache.has(userId)) {
+    const currentPromise = userCache.get(userId)!;
+    const updatedPromise = currentPromise.then(profile => {
+      if (profile) {
+        return { ...profile, ...updatedData };
+      }
+      return null;
+    });
+    userCache.set(userId, updatedPromise);
+  }
+};

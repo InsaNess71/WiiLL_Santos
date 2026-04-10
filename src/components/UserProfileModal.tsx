@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { X, MessageSquare, User, Edit2, Save, FileText, Shield, LogOut, Trash2, ShieldCheck } from 'lucide-react';
 import { db, auth, logOut } from '../firebase';
-import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Confession, UserProfile, AVATARS, ADMIN_AVATAR } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import PrivacyPolicy from './PrivacyPolicy';
 import TermsOfUse from './TermsOfUse';
+import { getUserProfile, updateUserCache } from '../lib/userCache';
 
 interface UserProfileModalProps {
   userId: string;
@@ -121,6 +122,7 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
 
       await updateDoc(doc(db, 'users', userId), updateData);
       
+      updateUserCache(userId, updateData);
       setProfile(prev => prev ? { ...prev, ...updateData } : null);
       setIsEditing(false);
     } catch (err) {

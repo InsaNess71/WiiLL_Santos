@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { collection, query, orderBy, onSnapshot, limit, where, getDoc, getDocs, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, limit, where, getDoc, getDocs, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth, signInAnonymouslyUser, signInWithGoogle, logOut, getMessagingInstance } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getToken, onMessage } from 'firebase/messaging';
@@ -13,7 +13,8 @@ import UserProfileModal from './components/UserProfileModal';
 import SplashScreen from './components/SplashScreen';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import TermsOfUse from './components/TermsOfUse';
-import { Ghost, PenSquare, Flame, Clock, Filter, LogIn, MessageSquare, LogOut, User, Search, X, Trophy, Home, Bell } from 'lucide-react';
+import AdminDashboard from './components/AdminDashboard';
+import { Ghost, PenSquare, Flame, Clock, Filter, LogIn, MessageSquare, LogOut, User, Search, X, Trophy, Home, Bell, ShieldAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 type SortOption = 'recent' | 'popular' | 'top_week';
@@ -95,6 +96,8 @@ export default function App() {
   const [hasMore, setHasMore] = useState(true);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+  const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -175,8 +178,10 @@ export default function App() {
           if (!userDoc.exists()) {
             setNeedsNickname(true);
           } else {
+            const userData = userDoc.data() as UserProfile;
+            setCurrentUserProfile(userData);
+            
             // Check if user is admin but doesn't have the role set
-            const userData = userDoc.data();
             if (currentUser.email === 'wiillsantos16@gmail.com' && currentUser.emailVerified) {
               if (userData.role !== 'admin' || !userData.isVerified || userData.avatar !== ADMIN_AVATAR) {
                 await updateDoc(doc(db, 'users', currentUser.uid), {
@@ -184,6 +189,7 @@ export default function App() {
                   isVerified: true,
                   avatar: ADMIN_AVATAR
                 });
+                setCurrentUserProfile({ ...userData, role: 'admin', isVerified: true, avatar: ADMIN_AVATAR });
               }
             }
           }
@@ -200,9 +206,9 @@ export default function App() {
                   });
                   
                   if (token) {
-                    await updateDoc(doc(db, 'users', currentUser.uid), {
+                    await setDoc(doc(db, 'users', currentUser.uid, 'private', 'data'), {
                       fcmToken: token
-                    });
+                    }, { merge: true });
                   }
                 }
               }
@@ -337,11 +343,20 @@ export default function App() {
         where('category', '==', selectedCategory), 
         limit(feedLimit)
       );
-    } else if (sortBy === 'popular' || sortBy === 'top_week') {
+    } else if (sortBy === 'popular') {
       finalQuery = query(
         collection(db, 'confessions'), 
         orderBy('likes', 'desc'), 
         limit(feedLimit)
+      );
+    } else if (sortBy === 'top_week') {
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      finalQuery = query(
+        collection(db, 'confessions'), 
+        where('createdAt', '>=', oneWeekAgo),
+        orderBy('createdAt', 'desc'),
+        limit(100) // Fetch recent ones to sort by likes in JS
       );
     } else {
       finalQuery = query(
@@ -373,14 +388,10 @@ export default function App() {
         });
       }
 
-      // Filter for top_week
-      if (sortBy === 'top_week') {
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-        data = data.filter(c => {
-          const createdAt = c.createdAt?.toDate?.();
-          return createdAt && createdAt >= oneWeekAgo;
-        });
+      // Sort top_week by likes in JS
+      if (sortBy === 'top_week' && !selectedCategory) {
+        data.sort((a, b) => (b.likes || 0) - (a.likes || 0));
+        data = data.slice(0, feedLimit);
       }
 
       setConfessions(data);
@@ -509,6 +520,15 @@ export default function App() {
                   >
                     <User className="w-5 h-5" />
                   </button>
+                  {currentUserProfile?.role === 'admin' && (
+                    <button 
+                      onClick={() => setShowAdminDashboard(true)}
+                      className="p-2 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/20 transition-colors"
+                      title="Painel Admin"
+                    >
+                      <ShieldAlert className="w-5 h-5" />
+                    </button>
+                  )}
                   <button 
                     onClick={logOut}
                     className="p-2 rounded-full bg-zinc-900 text-zinc-400 hover:text-red-400 border border-zinc-800 transition-colors"
@@ -643,6 +663,7 @@ export default function App() {
         {selectedUserId && <UserProfileModal userId={selectedUserId} onClose={() => setSelectedUserId(null)} />}
         {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
         {showTerms && <TermsOfUse onClose={() => setShowTerms(false)} />}
+        {showAdminDashboard && <AdminDashboard onClose={() => setShowAdminDashboard(false)} />}
         
         {toast && (
           <motion.div

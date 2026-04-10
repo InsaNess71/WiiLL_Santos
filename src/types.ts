@@ -20,6 +20,7 @@ export interface Comment {
   likes?: number;
   createdAt: Timestamp | any;
   authorId: string;
+  isAI?: boolean;
 }
 
 export interface UserProfile {

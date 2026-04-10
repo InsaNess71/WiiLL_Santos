@@ -30,6 +30,7 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
   const [userJudgement, setUserJudgement] = useState<'right' | 'wrong' | null>(null);
   const [judgementLoading, setJudgementLoading] = useState(false);
   const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
+  const [isCopied, setIsCopied] = useState(false);
 
   useEffect(() => {
     const checkInteractions = async () => {
@@ -148,13 +149,8 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
       }
     } else {
       navigator.clipboard.writeText(shareText);
-      // Fallback for clipboard copy feedback (since alert is discouraged)
-      const btn = document.getElementById(`share-btn-${confession.id}`);
-      if (btn) {
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<span class="text-xs text-green-500">Copiado!</span>';
-        setTimeout(() => { btn.innerHTML = originalText; }, 2000);
-      }
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
     }
   };
 
@@ -336,12 +332,15 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
 
         <div className="flex items-center space-x-3">
           <button 
-            id={`share-btn-${confession.id}`}
             onClick={handleShare}
             className="flex items-center space-x-1.5 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
             title="Compartilhar"
           >
-            <Share2 className="w-5 h-5" />
+            {isCopied ? (
+              <span className="text-xs text-green-500 font-medium">Copiado!</span>
+            ) : (
+              <Share2 className="w-5 h-5" />
+            )}
           </button>
           
           {!isOwner && (
@@ -360,7 +359,7 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
 
       {showComments && (
         <div className="mt-4 pt-4 border-t border-zinc-800">
-          <CommentSection confessionId={confession.id} />
+          <CommentSection confessionId={confession.id} confessionText={confession.text} />
         </div>
       )}
 

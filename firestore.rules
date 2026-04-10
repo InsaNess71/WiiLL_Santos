@@ -39,8 +39,9 @@ service cloud.firestore {
     function isValidComment() {
       let data = request.resource.data;
       return data.confessionId is string &&
-             data.text is string && data.text.size() > 0 && data.text.size() <= 1000 &&
+             data.text is string && data.text.size() > 0 && data.text.size() <= 2000 &&
              (!('likes' in data) || data.likes is number) &&
+             (!('isAI' in data) || data.isAI is bool) &&
              data.createdAt is timestamp &&
              data.authorId is string && data.authorId == request.auth.uid;
     }
@@ -65,10 +66,14 @@ service cloud.firestore {
       allow create: if isOwner(userId) && isValidNickname(request.resource.data.nickname) &&
                     (!('role' in request.resource.data) || request.resource.data.role == 'user' || isAdmin());
       allow update: if (isOwner(userId) && 
-                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname', 'lastActive', 'gender', 'maritalStatus', 'bio', 'avatar', 'fcmToken']) &&
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname', 'lastActive', 'gender', 'maritalStatus', 'bio', 'avatar']) &&
                     isValidProfile(request.resource.data)) || 
                     isAdmin();
       allow delete: if isOwner(userId) || isAdmin();
+
+      match /private/{docId} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
     match /chats/{chatId} {

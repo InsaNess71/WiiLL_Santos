@@ -5,6 +5,7 @@ import { db, auth } from '../firebase';
 import { Send, X, ShieldAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { containsProfanity, filterProfanity } from '../lib/filter';
+import { moderateConfession } from '../services/geminiService';
 
 interface CreateConfessionProps {
   onClose: () => void;
@@ -31,6 +32,15 @@ export default function CreateConfession({ onClose }: CreateConfessionProps) {
     setError('');
 
     try {
+      // 1. AI Moderation Check
+      const moderation = await moderateConfession(text);
+      if (!moderation.isApproved) {
+        setError(`Confissão bloqueada pela moderação: ${moderation.reason || 'Viola as diretrizes de segurança.'}`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // 2. Filter profanity and save
       const filteredText = filterProfanity(text.trim());
       
       const confessionData: any = {
