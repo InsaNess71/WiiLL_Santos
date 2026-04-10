@@ -1,6 +1,6 @@
 import { useState, useEffect, memo } from 'react';
-import { Confession } from '../types';
-import { Heart, MessageCircle, Share2, User, Trash2, AlertTriangle, Flag } from 'lucide-react';
+import { Confession, UserProfile } from '../types';
+import { Heart, MessageCircle, Share2, User, Trash2, AlertTriangle, Flag, ShieldCheck } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '../lib/utils';
@@ -19,6 +19,7 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
   const [isLiked, setIsLiked] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [likeLoading, setLikeLoading] = useState(false);
+  const [authorProfile, setAuthorProfile] = useState<UserProfile | null>(null);
   const [authorNickname, setAuthorNickname] = useState<string>('Carregando...');
   const [authorAvatar, setAuthorAvatar] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
@@ -28,6 +29,7 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
   const [hasReported, setHasReported] = useState(false);
   const [userJudgement, setUserJudgement] = useState<'right' | 'wrong' | null>(null);
   const [judgementLoading, setJudgementLoading] = useState(false);
+  const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     const checkInteractions = async () => {
@@ -44,6 +46,10 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
       if (judgementSnap.exists()) {
         setUserJudgement(judgementSnap.data().vote);
       }
+      
+      // Get current user profile for admin check
+      const profile = await getUserProfile(auth.currentUser.uid);
+      setCurrentUserProfile(profile);
     };
     checkInteractions();
   }, [confession.id]);
@@ -53,6 +59,7 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
       try {
         const userProfile = await getUserProfile(confession.authorId);
         if (userProfile) {
+          setAuthorProfile(userProfile);
           setAuthorNickname(userProfile.nickname);
           setAuthorAvatar(userProfile.avatar || null);
         } else {
@@ -151,8 +158,12 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
     }
   };
 
+  const isAdmin = currentUserProfile?.role === 'admin';
+  const isOwner = auth.currentUser?.uid === confession.authorId;
+  const canDelete = isOwner || isAdmin;
+
   const handleDelete = async () => {
-    if (!auth.currentUser || auth.currentUser.uid !== confession.authorId) return;
+    if (!auth.currentUser || !canDelete) return;
     setIsDeleting(true);
     try {
       await deleteDoc(doc(db, 'confessions', confession.id));
@@ -198,13 +209,14 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
     }
   };
 
-  const isOwner = auth.currentUser?.uid === confession.authorId;
-
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-4 shadow-xl relative"
+      className={cn(
+        "bg-zinc-900 border rounded-2xl p-5 mb-4 shadow-xl relative",
+        authorProfile?.role === 'admin' ? "border-pink-500/50 shadow-pink-500/10" : "border-zinc-800"
+      )}
     >
       <div className="flex items-center justify-between mb-4">
         <button 
@@ -219,7 +231,14 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
             )}
           </div>
           <div>
-            <p className="text-sm font-bold text-zinc-100">{authorNickname}</p>
+            <div className="flex items-center space-x-1">
+              <p className={cn("text-sm font-bold", authorProfile?.role === 'admin' ? "text-pink-400" : "text-zinc-100")}>
+                {authorNickname}
+              </p>
+              {authorProfile?.isVerified && (
+                <ShieldCheck className="w-4 h-4 text-blue-400" />
+              )}
+            </div>
             <div className="flex items-center space-x-2 mt-0.5">
               <span className="text-[10px] uppercase tracking-wider font-medium text-pink-500">
                 {confession.category}
@@ -236,10 +255,11 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
           <span className="text-xs text-zinc-500 shrink-0">
             {confession.createdAt?.toDate ? formatDistanceToNow(confession.createdAt.toDate(), { addSuffix: true, locale: ptBR }) : 'agora'}
           </span>
-          {isOwner && (
+          {canDelete && (
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="text-zinc-500 hover:text-red-500 transition-colors p-1"
+              className={cn("transition-colors p-1", isAdmin && !isOwner ? "text-red-500 hover:text-red-400" : "text-zinc-500 hover:text-red-500")}
+              title={isAdmin && !isOwner ? "Deletar como Admin" : "Deletar"}
             >
               <Trash2 className="w-4 h-4" />
             </button>

@@ -11,6 +11,12 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "wiillsantos16@gmail.com" && request.auth.token.email_verified == true));
+    }
+
     function getJudgementVal(data, key) {
       return ('judgement' in data && key in data.judgement) ? data.judgement[key] : 0;
     }
@@ -49,15 +55,20 @@ service cloud.firestore {
              (!('gender' in data) || (data.gender is string && data.gender.size() <= 50)) &&
              (!('maritalStatus' in data) || (data.maritalStatus is string && data.maritalStatus.size() <= 50)) &&
              (!('bio' in data) || (data.bio is string && data.bio.size() <= 500)) &&
-             (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 200));
+             (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 200)) &&
+             (!('role' in data) || data.role in ['user', 'admin']) &&
+             (!('isVerified' in data) || data.isVerified is bool);
     }
 
     match /users/{userId} {
       allow read: if true;
-      allow create: if isOwner(userId) && isValidNickname(request.resource.data.nickname);
-      allow update: if isOwner(userId) && 
-                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname', 'lastActive', 'gender', 'maritalStatus', 'bio', 'avatar']) &&
-                    isValidProfile(request.resource.data);
+      allow create: if isOwner(userId) && isValidNickname(request.resource.data.nickname) &&
+                    (!('role' in request.resource.data) || request.resource.data.role == 'user' || isAdmin());
+      allow update: if (isOwner(userId) && 
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname', 'lastActive', 'gender', 'maritalStatus', 'bio', 'avatar', 'fcmToken']) &&
+                    isValidProfile(request.resource.data)) || 
+                    isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
     }
 
     match /chats/{chatId} {
@@ -118,7 +129,7 @@ service cloud.firestore {
                       )
                     );
                     
-      allow delete: if isOwner(resource.data.authorId);
+      allow delete: if isOwner(resource.data.authorId) || isAdmin();
 
       match /likes/{userId} {
         allow read: if true;
@@ -138,7 +149,7 @@ service cloud.firestore {
       allow update: if isAuthenticated() &&
                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']) &&
                     (request.resource.data.likes == resource.data.likes + 1 || request.resource.data.likes == resource.data.likes - 1);
-      allow delete: if isOwner(resource.data.authorId);
+      allow delete: if isOwner(resource.data.authorId) || isAdmin();
 
       match /likes/{userId} {
         allow read: if true;
@@ -148,6 +159,7 @@ service cloud.firestore {
     }
 
     match /reports/{reportId} {
+      allow read, update, delete: if isAdmin();
       allow create: if isAuthenticated() &&
                     request.resource.data.confessionId is string &&
                     request.resource.data.reportedBy == request.auth.uid &&

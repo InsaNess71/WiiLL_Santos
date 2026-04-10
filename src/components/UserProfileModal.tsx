@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { X, MessageSquare, User, Edit2, Save, FileText, Shield, LogOut } from 'lucide-react';
+import { X, MessageSquare, User, Edit2, Save, FileText, Shield, LogOut, Trash2, ShieldCheck } from 'lucide-react';
 import { db, auth, logOut } from '../firebase';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
-import { Confession, UserProfile, AVATARS } from '../types';
+import { Confession, UserProfile, AVATARS, ADMIN_AVATAR } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import PrivacyPolicy from './PrivacyPolicy';
@@ -33,10 +33,17 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
   });
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
+        if (auth.currentUser) {
+          const currentProfile = await getUserProfile(auth.currentUser.uid);
+          setCurrentUserProfile(currentProfile);
+        }
+
         const userDoc = await getDoc(doc(db, 'users', userId));
         if (userDoc.exists()) {
           const data = userDoc.data() as UserProfile;
@@ -125,7 +132,25 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
   };
 
   const isMe = auth.currentUser?.uid === userId;
+  const isAdmin = currentUserProfile?.role === 'admin';
   const nickname = profile?.nickname || 'Usuário Anônimo';
+
+  const handleDeleteUser = async () => {
+    if (!isAdmin || isMe || isDeletingUser) return;
+    if (!window.confirm(`Tem certeza que deseja BANIR o usuário ${nickname}? Isso apagará o perfil dele.`)) return;
+    
+    setIsDeletingUser(true);
+    try {
+      // In a real app, you'd also want to delete their confessions, comments, etc.
+      // or use a Cloud Function to clean up. For now, we delete the user profile.
+      await deleteDoc(doc(db, 'users', userId));
+      onClose();
+    } catch (err) {
+      console.error("Error deleting user:", err);
+      setError('Erro ao banir usuário.');
+      setIsDeletingUser(false);
+    }
+  };
 
   let statusText = '';
   let isOnline = false;
@@ -142,6 +167,8 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
       statusText = `Visto por último ${formatDistanceToNow(lastActiveDate, { addSuffix: true, locale: ptBR })}`;
     }
   }
+
+  const availableAvatars = isAdmin ? [ADMIN_AVATAR, ...AVATARS] : AVATARS;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -175,7 +202,12 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
                 />
               ) : (
                 <>
-                  <h2 className="text-xl font-bold text-zinc-100">{nickname}</h2>
+                  <div className="flex items-center space-x-2">
+                    <h2 className="text-xl font-bold text-zinc-100">{nickname}</h2>
+                    {profile?.isVerified && (
+                      <ShieldCheck className="w-5 h-5 text-blue-400" />
+                    )}
+                  </div>
                   <div className="flex items-center space-x-2 mt-0.5">
                     <p className="text-sm text-zinc-500">{confessions.length} confissões</p>
                     {statusText && (
@@ -220,7 +252,7 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
               <div>
                 <label className="block text-xs font-medium text-zinc-400 mb-2">Escolha seu Avatar</label>
                 <div className="grid grid-cols-4 gap-2">
-                  {AVATARS.map((avatarUrl, idx) => (
+                  {availableAvatars.map((avatarUrl, idx) => (
                     <button
                       key={idx}
                       onClick={() => setEditForm({ ...editForm, avatar: avatarUrl })}
@@ -317,14 +349,26 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
               )}
 
               {!isMe && auth.currentUser && (
-                <button
-                  onClick={handleStartChat}
-                  disabled={startingChat}
-                  className="w-full mb-6 flex items-center justify-center space-x-2 bg-pink-600 hover:bg-pink-500 text-white py-3 px-4 rounded-xl font-medium transition-colors disabled:opacity-50"
-                >
-                  <MessageSquare className="w-5 h-5" />
-                  <span>{startingChat ? 'Iniciando...' : 'Chamar no Bate-papo'}</span>
-                </button>
+                <div className="flex space-x-2 mb-6">
+                  <button
+                    onClick={handleStartChat}
+                    disabled={startingChat}
+                    className="flex-1 flex items-center justify-center space-x-2 bg-pink-600 hover:bg-pink-500 text-white py-3 px-4 rounded-xl font-medium transition-colors disabled:opacity-50"
+                  >
+                    <MessageSquare className="w-5 h-5" />
+                    <span>{startingChat ? 'Iniciando...' : 'Chamar no Bate-papo'}</span>
+                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={handleDeleteUser}
+                      disabled={isDeletingUser}
+                      className="flex-none flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 text-red-500 py-3 px-4 rounded-xl font-medium transition-colors disabled:opacity-50"
+                      title="Banir Usuário"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
               )}
 
               <h3 className="text-sm font-medium text-zinc-400 mb-4 uppercase tracking-wider">Confissões de {nickname}</h3>

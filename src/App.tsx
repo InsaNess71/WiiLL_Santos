@@ -3,7 +3,7 @@ import { collection, query, orderBy, onSnapshot, limit, where, getDoc, getDocs, 
 import { db, auth, signInAnonymouslyUser, signInWithGoogle, logOut, getMessagingInstance } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getToken, onMessage } from 'firebase/messaging';
-import { Confession, CATEGORIES, Chat, UserProfile } from './types';
+import { Confession, CATEGORIES, Chat, UserProfile, ADMIN_AVATAR } from './types';
 import ConfessionCard from './components/ConfessionCard';
 import CreateConfession from './components/CreateConfession';
 import NicknameModal from './components/NicknameModal';
@@ -174,6 +174,18 @@ export default function App() {
           const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
           if (!userDoc.exists()) {
             setNeedsNickname(true);
+          } else {
+            // Check if user is admin but doesn't have the role set
+            const userData = userDoc.data();
+            if (currentUser.email === 'wiillsantos16@gmail.com' && currentUser.emailVerified) {
+              if (userData.role !== 'admin' || !userData.isVerified || userData.avatar !== ADMIN_AVATAR) {
+                await updateDoc(doc(db, 'users', currentUser.uid), {
+                  role: 'admin',
+                  isVerified: true,
+                  avatar: ADMIN_AVATAR
+                });
+              }
+            }
           }
 
           // Request FCM Token for Push Notifications

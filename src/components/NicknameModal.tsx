@@ -3,6 +3,7 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { motion } from 'motion/react';
 import { ShieldAlert, ArrowRight } from 'lucide-react';
+import { ADMIN_AVATAR } from '../types';
 
 interface NicknameModalProps {
   onComplete: () => void;
@@ -33,11 +34,21 @@ export default function NicknameModal({ onComplete }: NicknameModalProps) {
     setError('');
 
     try {
-      await setDoc(doc(db, 'users', auth.currentUser.uid), {
+      const isAdmin = auth.currentUser.email === 'wiillsantos16@gmail.com' && auth.currentUser.emailVerified;
+      
+      const userData: any = {
         nickname: trimmed,
         createdAt: serverTimestamp(),
         lastActive: serverTimestamp()
-      });
+      };
+
+      if (isAdmin) {
+        userData.role = 'admin';
+        userData.isVerified = true;
+        userData.avatar = ADMIN_AVATAR;
+      }
+
+      await setDoc(doc(db, 'users', auth.currentUser.uid), userData);
       onComplete();
     } catch (err) {
       console.error('Error setting nickname:', err);

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, memo } from 'react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, getDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, getDoc, writeBatch, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { Comment } from '../types';
-import { Send, User, ShieldAlert, Heart, Trophy } from 'lucide-react';
+import { Comment, UserProfile } from '../types';
+import { Send, User, ShieldAlert, Heart, Trophy, ShieldCheck, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import UserProfileModal from './UserProfileModal';
@@ -12,16 +12,20 @@ import { cn } from '../lib/utils';
 import { getUserProfile } from '../lib/userCache';
 
 const CommentItem = memo(function CommentItem({ comment, isBestComment }: { comment: Comment, isBestComment?: boolean }) {
+  const [authorProfile, setAuthorProfile] = useState<UserProfile | null>(null);
   const [authorNickname, setAuthorNickname] = useState<string>('Carregando...');
   const [showProfile, setShowProfile] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [likeLoading, setLikeLoading] = useState(false);
+  const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     const fetchAuthor = async () => {
       try {
         const userProfile = await getUserProfile(comment.authorId);
         if (userProfile) {
+          setAuthorProfile(userProfile);
           setAuthorNickname(userProfile.nickname);
         } else {
           setAuthorNickname('Usuário Anônimo');
@@ -40,6 +44,9 @@ const CommentItem = memo(function CommentItem({ comment, isBestComment }: { comm
       const likeRef = doc(db, 'comments', comment.id, 'likes', auth.currentUser.uid);
       const likeSnap = await getDoc(likeRef);
       setIsLiked(likeSnap.exists());
+      
+      const profile = await getUserProfile(auth.currentUser.uid);
+      setCurrentUserProfile(profile);
     };
     checkLike();
   }, [comment.id]);
@@ -71,10 +78,33 @@ const CommentItem = memo(function CommentItem({ comment, isBestComment }: { comm
     }
   };
 
+  const isAdmin = currentUserProfile?.role === 'admin';
+  const isOwner = auth.currentUser?.uid === comment.authorId;
+  const canDelete = isOwner || isAdmin;
+
+  const handleDelete = async () => {
+    if (!auth.currentUser || !canDelete || isDeleting) return;
+    if (!window.confirm("Tem certeza que deseja excluir este comentário?")) return;
+    
+    setIsDeleting(true);
+    try {
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'comments', comment.id));
+      batch.update(doc(db, 'confessions', comment.confessionId), {
+        commentCount: increment(-1)
+      });
+      await batch.commit();
+    } catch (error) {
+      console.error("Error deleting comment:", error);
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className={cn(
       "rounded-lg p-3 relative",
-      isBestComment ? "bg-yellow-500/10 border border-yellow-500/30" : "bg-zinc-800/50"
+      isBestComment ? "bg-yellow-500/10 border border-yellow-500/30" : "bg-zinc-800/50",
+      authorProfile?.role === 'admin' ? "border border-pink-500/30" : ""
     )}>
       {isBestComment && (
         <div className="absolute -top-2 -right-2 bg-yellow-500 text-zinc-900 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center space-x-1 shadow-lg shadow-yellow-500/20">
@@ -88,13 +118,36 @@ const CommentItem = memo(function CommentItem({ comment, isBestComment }: { comm
           className="flex items-center space-x-1.5 hover:opacity-80 transition-opacity"
         >
           <div className="w-5 h-5 bg-pink-600/20 rounded-full flex items-center justify-center text-pink-500">
-            <User className="w-3 h-3" />
+            {authorProfile?.avatar ? (
+              <img src={authorProfile.avatar} alt="Avatar" className="w-full h-full object-cover rounded-full" />
+            ) : (
+              <User className="w-3 h-3" />
+            )}
           </div>
-          <span className="text-xs font-bold text-zinc-300">{authorNickname}</span>
+          <div className="flex items-center space-x-1">
+            <span className={cn("text-xs font-bold", authorProfile?.role === 'admin' ? "text-pink-400" : "text-zinc-300")}>
+              {authorNickname}
+            </span>
+            {authorProfile?.isVerified && (
+              <ShieldCheck className="w-3 h-3 text-blue-400" />
+            )}
+          </div>
         </button>
-        <span className="text-[10px] text-zinc-500">
-          {comment.createdAt?.toDate ? formatDistanceToNow(comment.createdAt.toDate(), { addSuffix: true, locale: ptBR }) : 'agora'}
-        </span>
+        <div className="flex items-center space-x-2">
+          <span className="text-[10px] text-zinc-500">
+            {comment.createdAt?.toDate ? formatDistanceToNow(comment.createdAt.toDate(), { addSuffix: true, locale: ptBR }) : 'agora'}
+          </span>
+          {canDelete && (
+            <button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className={cn("p-1 transition-colors", isAdmin && !isOwner ? "text-red-500 hover:text-red-400" : "text-zinc-500 hover:text-red-500")}
+              title={isAdmin && !isOwner ? "Deletar como Admin" : "Deletar"}
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
+        </div>
       </div>
       <p className="text-zinc-300 text-sm ml-6 mb-2">{comment.text}</p>
       
