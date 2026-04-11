@@ -34,7 +34,7 @@ export default function NicknameModal({ onComplete }: NicknameModalProps) {
     setError('');
 
     try {
-      const isAdmin = auth.currentUser.email === 'wiillsantos16@gmail.com' && auth.currentUser.emailVerified;
+      const isAdmin = auth.currentUser.email === 'wiillsantos16@gmail.com';
       
       const userData: any = {
         nickname: trimmed,

@@ -100,7 +100,11 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
   };
 
   const handleSaveProfile = async () => {
-    if (!auth.currentUser || auth.currentUser.uid !== userId) return;
+    if (!auth.currentUser) return;
+    const isMe = auth.currentUser.uid === userId;
+    const isAdmin = currentUserProfile?.role === 'admin' || auth.currentUser?.email === 'wiillsantos16@gmail.com';
+    
+    if (!isMe && !isAdmin) return;
     
     if (editForm.nickname.length < 3 || editForm.nickname.length > 20) {
       setError('O apelido deve ter entre 3 e 20 caracteres.');
@@ -113,17 +117,22 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
     try {
       const updateData: any = {
         nickname: editForm.nickname.trim(),
+        gender: editForm.gender.trim(),
+        maritalStatus: editForm.maritalStatus.trim(),
+        bio: editForm.bio.trim(),
+        avatar: editForm.avatar
       };
-      
-      if (editForm.gender) updateData.gender = editForm.gender.trim();
-      if (editForm.maritalStatus) updateData.maritalStatus = editForm.maritalStatus.trim();
-      if (editForm.bio) updateData.bio = editForm.bio.trim();
-      if (editForm.avatar) updateData.avatar = editForm.avatar;
 
       await updateDoc(doc(db, 'users', userId), updateData);
       
       updateUserCache(userId, updateData);
       setProfile(prev => prev ? { ...prev, ...updateData } : null);
+      
+      // Dispatch event for other components to update
+      window.dispatchEvent(new CustomEvent('userProfileUpdated', { 
+        detail: { userId, profile: { ...profile, ...updateData } } 
+      }));
+      
       setIsEditing(false);
     } catch (err) {
       console.error("Error updating profile:", err);
@@ -224,7 +233,7 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
             </div>
           </div>
           <div className="flex items-center space-x-2 ml-4">
-            {isMe && !isEditing && (
+            {(isMe || isAdmin) && !isEditing && (
               <button 
                 onClick={() => setIsEditing(true)}
                 className="p-2 text-zinc-400 hover:text-pink-400 hover:bg-zinc-800 rounded-full transition-colors"

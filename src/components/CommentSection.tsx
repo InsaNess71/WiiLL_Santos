@@ -2,11 +2,19 @@ import React, { useState, useEffect, memo } from 'react';
 import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, getDoc, writeBatch, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Comment, UserProfile } from '../types';
-import { Send, User, ShieldAlert, Heart, Trophy, ShieldCheck, Trash2, Bot, Sparkles } from 'lucide-react';
+import { Send, User, ShieldAlert, Heart, Trophy, ShieldCheck, Trash2, Bot, Sparkles, AlertTriangle, X } from 'lucide-react';
+
+const REPORT_REASONS = [
+  'Conteúdo ofensivo ou discurso de ódio',
+  'Spam ou propaganda',
+  'Conteúdo sexualmente explícito',
+  'Incentivo à violência ou automutilação',
+  'Assédio ou bullying'
+];
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import UserProfileModal from './UserProfileModal';
-import { AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { containsProfanity, filterProfanity } from '../lib/filter';
 import { cn } from '../lib/utils';
 import { getUserProfile } from '../lib/userCache';
@@ -19,7 +27,12 @@ const CommentItem = memo(function CommentItem({ comment, isBestComment, onReply 
   const [isLiked, setIsLiked] = useState(false);
   const [likeLoading, setLikeLoading] = useState(false);
   const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [isReporting, setIsReporting] = useState(false);
+  const [hasReported, setHasReported] = useState(false);
 
   useEffect(() => {
     const fetchAuthor = async () => {
@@ -37,6 +50,20 @@ const CommentItem = memo(function CommentItem({ comment, isBestComment, onReply 
       }
     };
     fetchAuthor();
+
+    const handleProfileUpdate = (e: any) => {
+      const { userId, profile: updatedProfile } = e.detail;
+      if (userId === comment.authorId) {
+        setAuthorProfile(prev => prev ? { ...prev, ...updatedProfile } : updatedProfile);
+        if (updatedProfile.nickname) setAuthorNickname(updatedProfile.nickname);
+      }
+      if (auth.currentUser && userId === auth.currentUser.uid) {
+        setCurrentUserProfile(prev => prev ? { ...prev, ...updatedProfile } : updatedProfile);
+      }
+    };
+
+    window.addEventListener('userProfileUpdated', handleProfileUpdate);
+    return () => window.removeEventListener('userProfileUpdated', handleProfileUpdate);
   }, [comment.authorId]);
 
   useEffect(() => {
@@ -79,13 +106,12 @@ const CommentItem = memo(function CommentItem({ comment, isBestComment, onReply 
     }
   };
 
-  const isAdmin = currentUserProfile?.role === 'admin';
+  const isAdmin = currentUserProfile?.role === 'admin' || auth.currentUser?.email === 'wiillsantos16@gmail.com';
   const isOwner = auth.currentUser?.uid === comment.authorId;
   const canDelete = isOwner || isAdmin;
 
   const handleDelete = async () => {
     if (!auth.currentUser || !canDelete || isDeleting) return;
-    if (!window.confirm("Tem certeza que deseja excluir este comentário?")) return;
     
     setIsDeleting(true);
     try {
@@ -95,9 +121,32 @@ const CommentItem = memo(function CommentItem({ comment, isBestComment, onReply 
         commentCount: increment(-1)
       });
       await batch.commit();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting comment:", error);
       setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  const handleReport = async () => {
+    if (!auth.currentUser || hasReported || isReporting || !reportReason) return;
+    setIsReporting(true);
+    try {
+      await addDoc(collection(db, 'reports'), {
+        commentId: comment.id,
+        confessionId: comment.confessionId,
+        reportedBy: auth.currentUser.uid,
+        reason: reportReason,
+        createdAt: serverTimestamp(),
+        status: 'pending',
+        type: 'comment'
+      });
+      setHasReported(true);
+      setShowReportModal(false);
+    } catch (error) {
+      console.error("Error reporting comment:", error);
+    } finally {
+      setIsReporting(false);
     }
   };
 
@@ -117,7 +166,11 @@ const CommentItem = memo(function CommentItem({ comment, isBestComment, onReply 
               {comment.createdAt?.toDate ? formatDistanceToNow(comment.createdAt.toDate(), { addSuffix: true, locale: ptBR }) : 'agora'}
             </span>
             {canDelete && (
-              <button onClick={handleDelete} disabled={isDeleting} className="p-1 text-zinc-500 hover:text-red-500 transition-colors">
+              <button 
+                onClick={() => setShowDeleteConfirm(true)} 
+                disabled={isDeleting} 
+                className="p-1 text-zinc-500 hover:text-red-500 transition-colors"
+              >
                 <Trash2 className="w-3 h-3" />
               </button>
             )}
@@ -133,6 +186,35 @@ const CommentItem = memo(function CommentItem({ comment, isBestComment, onReply 
             <span>{comment.likes || 0}</span>
           </button>
         </div>
+
+        <AnimatePresence>
+          {showDeleteConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-10 bg-zinc-900/95 backdrop-blur-sm rounded-lg flex flex-col items-center justify-center p-2 text-center"
+            >
+              <p className="text-[10px] font-bold text-zinc-100 mb-2">Excluir comentário?</p>
+              <div className="flex items-center space-x-2 w-full px-4">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={isDeleting}
+                  className="flex-1 py-1 rounded-md text-[10px] font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 transition-colors"
+                >
+                  Não
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="flex-1 py-1 rounded-md text-[10px] font-medium text-white bg-red-600 hover:bg-red-700 transition-colors flex items-center justify-center"
+                >
+                  {isDeleting ? <div className="w-2 h-2 border border-white/30 border-t-white rounded-full animate-spin" /> : 'Sim'}
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
   }
@@ -176,13 +258,25 @@ const CommentItem = memo(function CommentItem({ comment, isBestComment, onReply 
           </span>
           {canDelete && (
             <button
-              onClick={handleDelete}
+              onClick={() => setShowDeleteConfirm(true)}
               disabled={isDeleting}
               className={cn("p-1 transition-colors", isAdmin && !isOwner ? "text-red-500 hover:text-red-400" : "text-zinc-500 hover:text-red-500")}
               title={isAdmin && !isOwner ? "Deletar como Admin" : "Deletar"}
             >
               <Trash2 className="w-3 h-3" />
             </button>
+          )}
+          {!isOwner && !hasReported && (
+            <button
+              onClick={() => setShowReportModal(true)}
+              className="p-1 text-zinc-500 hover:text-yellow-500 transition-colors"
+              title="Denunciar"
+            >
+              <AlertTriangle className="w-3 h-3" />
+            </button>
+          )}
+          {hasReported && (
+            <span className="text-[10px] text-red-500 font-medium">Denunciado</span>
           )}
         </div>
       </div>
@@ -206,11 +300,82 @@ const CommentItem = memo(function CommentItem({ comment, isBestComment, onReply 
       </div>
 
       <AnimatePresence>
+        {showDeleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-10 bg-zinc-900/95 backdrop-blur-sm rounded-lg flex flex-col items-center justify-center p-2 text-center"
+          >
+            <p className="text-[10px] font-bold text-zinc-100 mb-2">Excluir comentário?</p>
+            <div className="flex items-center space-x-2 w-full px-4">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+                className="flex-1 py-1 rounded-md text-[10px] font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 transition-colors"
+              >
+                Não
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="flex-1 py-1 rounded-md text-[10px] font-medium text-white bg-red-600 hover:bg-red-700 transition-colors flex items-center justify-center"
+              >
+                {isDeleting ? <div className="w-2 h-2 border border-white/30 border-t-white rounded-full animate-spin" /> : 'Sim'}
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {showProfile && (
           <UserProfileModal 
             userId={comment.authorId} 
             onClose={() => setShowProfile(false)} 
           />
+        )}
+
+        {showReportModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-zinc-100">Denunciar Comentário</h3>
+                <button onClick={() => setShowReportModal(false)} className="text-zinc-500 hover:text-zinc-300">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <p className="text-sm text-zinc-400 mb-4">Por que você está denunciando este comentário?</p>
+              
+              <div className="space-y-2 mb-6">
+                {REPORT_REASONS.map(reason => (
+                  <button
+                    key={reason}
+                    onClick={() => setReportReason(reason)}
+                    className={cn(
+                      "w-full text-left p-3 rounded-xl text-sm transition-all border",
+                      reportReason === reason 
+                        ? "bg-pink-600/20 border-pink-500 text-pink-100" 
+                        : "bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700"
+                    )}
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+              
+              <button
+                onClick={handleReport}
+                disabled={!reportReason || isReporting}
+                className="w-full py-3 bg-pink-600 hover:bg-pink-700 disabled:opacity-50 disabled:hover:bg-pink-600 text-white rounded-xl font-bold transition-all shadow-lg shadow-pink-500/20"
+              >
+                {isReporting ? 'Enviando...' : 'Enviar Denúncia'}
+              </button>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

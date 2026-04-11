@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { X, ShieldAlert, Trash2, UserX, CheckCircle, AlertTriangle } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
@@ -9,11 +9,14 @@ import { ptBR } from 'date-fns/locale';
 interface ReportData {
   id: string;
   confessionId: string;
+  commentId?: string;
   reportedBy: string;
   reason: string;
   createdAt: any;
   status: string;
+  type?: 'confession' | 'comment';
   confessionText?: string;
+  commentText?: string;
   authorId?: string;
   authorNickname?: string;
   reporterNickname?: string;
@@ -27,6 +30,12 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
   const [reports, setReports] = useState<ReportData[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    type: 'delete_confession' | 'delete_comment' | 'ban_user';
+    reportId: string;
+    targetId: string;
+    authorId?: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchReports();
@@ -48,11 +57,24 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
         if (confessionSnap.exists()) {
           const confessionData = confessionSnap.data();
           report.confessionText = confessionData.text;
-          report.authorId = confessionData.authorId;
+          
+          if (report.type === 'comment' && report.commentId) {
+            const commentSnap = await getDoc(doc(db, 'comments', report.commentId));
+            if (commentSnap.exists()) {
+              const commentData = commentSnap.data();
+              report.commentText = commentData.text;
+              report.authorId = commentData.authorId;
+            } else {
+              report.commentText = '[Comentário já excluído]';
+            }
+          } else {
+            report.authorId = confessionData.authorId;
+          }
           
           // Fetch author details
-          if (confessionData.authorId) {
-            const userSnap = await getDoc(doc(db, 'users', confessionData.authorId));
+          const targetAuthorId = report.authorId;
+          if (targetAuthorId) {
+            const userSnap = await getDoc(doc(db, 'users', targetAuthorId));
             if (userSnap.exists()) {
               report.authorNickname = userSnap.data().nickname;
             } else {
@@ -105,7 +127,6 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
   };
 
   const handleDeleteConfession = async (reportId: string, confessionId: string) => {
-    if (!window.confirm("Tem certeza que deseja excluir esta confissão?")) return;
     setActionLoading(reportId);
     try {
       const batch = writeBatch(db);
@@ -118,18 +139,39 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
       alert("Erro ao excluir confissão.");
     } finally {
       setActionLoading(null);
+      setConfirmAction(null);
     }
   };
 
-  const handleBanUser = async (reportId: string, confessionId: string, authorId: string) => {
-    if (!window.confirm("Tem certeza que deseja BANIR este usuário e excluir a confissão?")) return;
+  const handleDeleteComment = async (reportId: string, commentId: string) => {
+    setActionLoading(reportId);
+    try {
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'comments', commentId));
+      batch.update(doc(db, 'reports', reportId), { status: 'resolved' });
+      await batch.commit();
+      setReports(prev => prev.filter(r => r.id !== reportId));
+    } catch (error) {
+      console.error("Erro ao excluir comentário:", error);
+      alert("Erro ao excluir comentário.");
+    } finally {
+      setActionLoading(null);
+      setConfirmAction(null);
+    }
+  };
+
+  const handleBanUser = async (reportId: string, targetId: string, authorId: string, isComment: boolean) => {
     setActionLoading(reportId);
     try {
       const batch = writeBatch(db);
       if (authorId) {
         batch.delete(doc(db, 'users', authorId));
       }
-      batch.delete(doc(db, 'confessions', confessionId));
+      if (isComment) {
+        batch.delete(doc(db, 'comments', targetId));
+      } else {
+        batch.delete(doc(db, 'confessions', targetId));
+      }
       batch.update(doc(db, 'reports', reportId), { status: 'resolved' });
       await batch.commit();
       setReports(prev => prev.filter(r => r.id !== reportId));
@@ -138,6 +180,7 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
       alert("Erro ao banir usuário.");
     } finally {
       setActionLoading(null);
+      setConfirmAction(null);
     }
   };
 
@@ -186,7 +229,10 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center space-x-2">
                       <AlertTriangle className="w-4 h-4 text-yellow-500" />
-                      <span className="text-sm font-bold text-yellow-500">{report.reason}</span>
+                      <span className="text-sm font-bold text-yellow-500">
+                        {report.type === 'comment' ? 'Comentário: ' : 'Confissão: '}
+                        {report.reason}
+                      </span>
                     </div>
                     <span className="text-xs text-zinc-500">
                       {report.createdAt?.toDate ? formatDistanceToNow(report.createdAt.toDate(), { addSuffix: true, locale: ptBR }) : 'agora'}
@@ -194,7 +240,14 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                   </div>
                   
                   <div className="bg-zinc-950 p-4 rounded-lg border border-zinc-800/50 mb-4">
-                    <p className="text-sm text-zinc-300 italic">"{report.confessionText}"</p>
+                    {report.type === 'comment' ? (
+                      <>
+                        <p className="text-sm text-zinc-300 italic mb-2">Comentário: "{report.commentText}"</p>
+                        <p className="text-xs text-zinc-500">Na confissão: "{report.confessionText}"</p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-zinc-300 italic">"{report.confessionText}"</p>
+                    )}
                     <div className="flex justify-between items-center mt-3 pt-3 border-t border-zinc-800/50">
                       <p className="text-xs text-zinc-500">
                         <span className="font-medium text-zinc-400">Denunciado por:</span> {report.reporterNickname || 'Desconhecido'}
@@ -214,20 +267,31 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                       Ignorar Denúncia
                     </button>
                     
-                    {report.confessionText !== '[Confissão já excluída]' && (
+                    {(report.type === 'comment' ? report.commentText !== '[Comentário já excluído]' : report.confessionText !== '[Confissão já excluída]') && (
                       <>
                         <button
-                          onClick={() => handleDeleteConfession(report.id, report.confessionId)}
+                          onClick={() => {
+                            if (report.type === 'comment') {
+                              setConfirmAction({ type: 'delete_comment', reportId: report.id, targetId: report.commentId! });
+                            } else {
+                              setConfirmAction({ type: 'delete_confession', reportId: report.id, targetId: report.confessionId });
+                            }
+                          }}
                           disabled={actionLoading === report.id}
                           className="px-4 py-2 rounded-lg text-sm font-medium text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 transition-colors flex items-center space-x-2 disabled:opacity-50"
                         >
                           <Trash2 className="w-4 h-4" />
-                          <span>Excluir Confissão</span>
+                          <span>Excluir {report.type === 'comment' ? 'Comentário' : 'Confissão'}</span>
                         </button>
                         
                         {report.authorId && (
                           <button
-                            onClick={() => handleBanUser(report.id, report.confessionId, report.authorId!)}
+                            onClick={() => setConfirmAction({ 
+                              type: 'ban_user', 
+                              reportId: report.id, 
+                              targetId: report.type === 'comment' ? report.commentId! : report.confessionId,
+                              authorId: report.authorId
+                            })}
                             disabled={actionLoading === report.id}
                             className="px-4 py-2 rounded-lg text-sm font-medium text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 transition-colors flex items-center space-x-2 disabled:opacity-50"
                           >
@@ -243,6 +307,50 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
             </div>
           )}
         </div>
+
+        {/* Custom Confirmation Modal */}
+        <AnimatePresence>
+          {confirmAction && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+              >
+                <h3 className="text-lg font-bold text-zinc-100 mb-2">Confirmar Ação</h3>
+                <p className="text-sm text-zinc-400 mb-6">
+                  {confirmAction.type === 'ban_user' 
+                    ? "Tem certeza que deseja BANIR este usuário e excluir o conteúdo?" 
+                    : `Tem certeza que deseja excluir este ${confirmAction.type === 'delete_comment' ? 'comentário' : 'confissão'}?`}
+                </p>
+                
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => setConfirmAction(null)}
+                    className="flex-1 py-3 rounded-xl text-sm font-bold text-zinc-400 bg-zinc-800 hover:bg-zinc-700 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirmAction.type === 'delete_confession') {
+                        handleDeleteConfession(confirmAction.reportId, confirmAction.targetId);
+                      } else if (confirmAction.type === 'delete_comment') {
+                        handleDeleteComment(confirmAction.reportId, confirmAction.targetId);
+                      } else if (confirmAction.type === 'ban_user') {
+                        handleBanUser(confirmAction.reportId, confirmAction.targetId, confirmAction.authorId!, reports.find(r => r.id === confirmAction.reportId)?.type === 'comment');
+                      }
+                    }}
+                    className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-red-600 hover:bg-red-700 transition-colors"
+                  >
+                    Confirmar
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
   );

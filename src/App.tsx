@@ -14,7 +14,7 @@ import SplashScreen from './components/SplashScreen';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import TermsOfUse from './components/TermsOfUse';
 import AdminDashboard from './components/AdminDashboard';
-import { Ghost, PenSquare, Flame, Clock, Filter, LogIn, MessageSquare, LogOut, User, Search, X, Trophy, Home, Bell, ShieldAlert } from 'lucide-react';
+import { Ghost, PenSquare, Flame, Clock, Filter, LogIn, MessageSquare, LogOut, User, Search, X, Trophy, Home, Bell, ShieldAlert, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 type SortOption = 'recent' | 'popular' | 'top_week';
@@ -97,6 +97,7 @@ export default function App() {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
@@ -182,14 +183,20 @@ export default function App() {
             setCurrentUserProfile(userData);
             
             // Check if user is admin but doesn't have the role set
-            if (currentUser.email === 'wiillsantos16@gmail.com' && currentUser.emailVerified) {
-              if (userData.role !== 'admin' || !userData.isVerified || userData.avatar !== ADMIN_AVATAR) {
+            if (currentUser.email === 'wiillsantos16@gmail.com') {
+              if (userData.role !== 'admin' || !userData.isVerified) {
                 await updateDoc(doc(db, 'users', currentUser.uid), {
                   role: 'admin',
                   isVerified: true,
-                  avatar: ADMIN_AVATAR
+                  // Only set default admin avatar if they don't have one
+                  ...(!userData.avatar ? { avatar: ADMIN_AVATAR } : {})
                 });
-                setCurrentUserProfile({ ...userData, role: 'admin', isVerified: true, avatar: ADMIN_AVATAR });
+                setCurrentUserProfile({ 
+                  ...userData, 
+                  role: 'admin', 
+                  isVerified: true,
+                  avatar: userData.avatar || ADMIN_AVATAR 
+                });
               }
             }
           }
@@ -328,7 +335,25 @@ export default function App() {
       setTotalUnread(total);
     });
 
-    return () => unsubscribe();
+    const handleProfileUpdate = (e: any) => {
+      const { userId, profile: updatedProfile } = e.detail;
+      if (user && userId === user.uid) {
+        setCurrentUserProfile(prev => prev ? { ...prev, ...updatedProfile } : updatedProfile);
+      }
+    };
+
+    window.addEventListener('userProfileUpdated', handleProfileUpdate);
+
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 500);
+    };
+    window.addEventListener('scroll', handleScroll);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('userProfileUpdated', handleProfileUpdate);
+      window.removeEventListener('scroll', handleScroll);
+    };
   }, [user]);
 
   useEffect(() => {
@@ -400,11 +425,19 @@ export default function App() {
     return () => unsubscribe();
   }, [isAuthReady, sortBy, selectedCategory]);
 
+  const handleLoadMore = () => {
+    setFeedLimit(prev => prev + 10);
+  };
+
   const filteredConfessions = useMemo(() => {
     if (!searchQuery.trim()) return confessions;
     const lowerQuery = searchQuery.toLowerCase();
     return confessions.filter(c => c.text.toLowerCase().includes(lowerQuery));
   }, [confessions, searchQuery]);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   if (!isAuthReady) {
     return (
@@ -635,9 +668,18 @@ export default function App() {
                 </div>
               ) : (
                 <>
-                  {filteredConfessions.map(confession => (
-                      <ConfessionCard key={confession.id} confession={confession} />
+                  <div className="space-y-4">
+                    {filteredConfessions.map((confession, index) => (
+                      <motion.div
+                        key={confession.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: Math.min(index * 0.05, 0.5) }}
+                      >
+                        <ConfessionCard confession={confession} />
+                      </motion.div>
                     ))}
+                  </div>
                   
                   {hasMore && !searchQuery.trim() && (
                     <div className="pt-4 pb-8 flex justify-center">
@@ -750,6 +792,20 @@ export default function App() {
       `}} />
 
       <InstallPrompt />
+
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            onClick={scrollToTop}
+            className="fixed bottom-24 right-4 z-40 bg-pink-600 text-white p-3 rounded-full shadow-lg shadow-pink-500/30 sm:bottom-8 sm:right-8"
+          >
+            <ArrowUp className="w-6 h-6" />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

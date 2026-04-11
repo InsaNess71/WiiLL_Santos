@@ -72,6 +72,21 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
       }
     };
     fetchAuthor();
+
+    const handleProfileUpdate = (e: any) => {
+      const { userId, profile: updatedProfile } = e.detail;
+      if (userId === confession.authorId) {
+        setAuthorProfile(prev => prev ? { ...prev, ...updatedProfile } : updatedProfile);
+        if (updatedProfile.nickname) setAuthorNickname(updatedProfile.nickname);
+        if (updatedProfile.avatar) setAuthorAvatar(updatedProfile.avatar);
+      }
+      if (auth.currentUser && userId === auth.currentUser.uid) {
+        setCurrentUserProfile(prev => prev ? { ...prev, ...updatedProfile } : updatedProfile);
+      }
+    };
+
+    window.addEventListener('userProfileUpdated', handleProfileUpdate);
+    return () => window.removeEventListener('userProfileUpdated', handleProfileUpdate);
   }, [confession.authorId]);
 
   const handleLike = async () => {
@@ -154,7 +169,7 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
     }
   };
 
-  const isAdmin = currentUserProfile?.role === 'admin';
+  const isAdmin = currentUserProfile?.role === 'admin' || auth.currentUser?.email === 'wiillsantos16@gmail.com';
   const isOwner = auth.currentUser?.uid === confession.authorId;
   const canDelete = isOwner || isAdmin;
 

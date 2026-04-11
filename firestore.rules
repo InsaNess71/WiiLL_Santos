@@ -13,8 +13,10 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "wiillsantos16@gmail.com" && request.auth.token.email_verified == true));
+        (
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+          request.auth.token.email == "wiillsantos16@gmail.com"
+        );
     }
 
     function getJudgementVal(data, key) {
@@ -56,7 +58,7 @@ service cloud.firestore {
              (!('gender' in data) || (data.gender is string && data.gender.size() <= 50)) &&
              (!('maritalStatus' in data) || (data.maritalStatus is string && data.maritalStatus.size() <= 50)) &&
              (!('bio' in data) || (data.bio is string && data.bio.size() <= 500)) &&
-             (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 200)) &&
+             (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 2000)) &&
              (!('role' in data) || data.role in ['user', 'admin']) &&
              (!('isVerified' in data) || data.isVerified is bool);
     }
@@ -66,8 +68,12 @@ service cloud.firestore {
       allow create: if isOwner(userId) && isValidNickname(request.resource.data.nickname) &&
                     (!('role' in request.resource.data) || request.resource.data.role == 'user' || isAdmin());
       allow update: if (isOwner(userId) && 
-                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname', 'lastActive', 'gender', 'maritalStatus', 'bio', 'avatar']) &&
-                    isValidProfile(request.resource.data)) || 
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname', 'lastActive', 'gender', 'maritalStatus', 'bio', 'avatar', 'role', 'isVerified']) &&
+                    isValidProfile(request.resource.data) &&
+                    (
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isVerified']) ||
+                      isAdmin()
+                    )) || 
                     isAdmin();
       allow delete: if isOwner(userId) || isAdmin();
 
@@ -120,10 +126,11 @@ service cloud.firestore {
                       request.resource.data.likes == resource.data.likes + 1 || 
                       request.resource.data.likes == resource.data.likes - 1
                     ) &&
-                    // Comment count can only increase by 1
+                    // Comment count can only change by 1
                     (
                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['commentCount']) ||
-                      request.resource.data.commentCount == resource.data.commentCount + 1
+                      request.resource.data.commentCount == resource.data.commentCount + 1 ||
+                      request.resource.data.commentCount == resource.data.commentCount - 1
                     ) &&
                     // Judgement can only change by 1 or -1
                     (
