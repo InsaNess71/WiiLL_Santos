@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, getDoc, setDoc, increment } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { Chat, ChatMessage, UserProfile } from '../types';
 import { Send, Clock, AlertTriangle, ArrowLeft, User } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -57,6 +57,8 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
           }
         }
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `chats/${chatId}`);
     });
 
     const q = query(
@@ -67,6 +69,8 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
       const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ChatMessage[];
       setMessages(msgs);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `chats/${chatId}/messages`);
     });
 
     return () => {

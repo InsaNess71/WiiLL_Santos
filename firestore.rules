@@ -83,23 +83,30 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      allow get: if isAuthenticated() && (resource == null || request.auth.uid in resource.data.participants);
-      allow list: if isAuthenticated() && request.auth.uid in resource.data.participants;
+      allow get: if isAuthenticated() && (resource == null || request.auth.uid in resource.data.participants) && 
+                 (resource == null || resource.data.expiresAt > request.time);
+      allow list: if isAuthenticated() && request.auth.uid in resource.data.participants && 
+                  resource.data.expiresAt > request.time;
       allow create: if isAuthenticated() &&
                     request.auth.uid in request.resource.data.participants &&
                     request.resource.data.participants is list &&
                     request.resource.data.participants.size() == 2 &&
                     request.resource.data.durationMode in ['1h', '24h'] &&
-                    request.resource.data.expiresAt is timestamp;
+                    request.resource.data.expiresAt is timestamp &&
+                    request.resource.data.expiresAt > request.time;
       allow update: if isAuthenticated() && 
                     request.auth.uid in resource.data.participants &&
+                    resource.data.expiresAt > request.time &&
                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt', 'lastMessage', 'unreadCount', 'durationMode', 'expiresAt']) &&
                     request.resource.data.participants == resource.data.participants;
 
       match /messages/{messageId} {
-        allow read: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow read: if isAuthenticated() && 
+                    get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]) &&
+                    get(/databases/$(database)/documents/chats/$(chatId)).data.expiresAt > request.time;
         allow create: if isAuthenticated() &&
-                      request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants &&
+                      get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]) &&
+                      get(/databases/$(database)/documents/chats/$(chatId)).data.expiresAt > request.time &&
                       request.resource.data.text is string &&
                       request.resource.data.text.size() > 0 &&
                       request.resource.data.text.size() <= 1000 &&
@@ -120,24 +127,56 @@ service cloud.firestore {
       // Updates are only allowed for likes, commentCount, and judgement
       allow update: if isAuthenticated() &&
                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'commentCount', 'judgement']) &&
-                    // Likes can only change by 1 or -1
+                    // Likes can only change by 1 or -1 AND must be accompanied by a like document change
                     (
                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['likes']) ||
-                      request.resource.data.likes == resource.data.likes + 1 || 
-                      request.resource.data.likes == resource.data.likes - 1
+                      (
+                        request.resource.data.likes == resource.data.likes + 1 &&
+                        !exists(/databases/$(database)/documents/confessions/$(confessionId)/likes/$(request.auth.uid)) &&
+                        getAfter(/databases/$(database)/documents/confessions/$(confessionId)/likes/$(request.auth.uid)) != null
+                      ) || 
+                      (
+                        request.resource.data.likes == resource.data.likes - 1 &&
+                        exists(/databases/$(database)/documents/confessions/$(confessionId)/likes/$(request.auth.uid)) &&
+                        getAfter(/databases/$(database)/documents/confessions/$(confessionId)/likes/$(request.auth.uid)) == null
+                      )
                     ) &&
-                    // Comment count can only change by 1
+                    // Comment count can only change by 1 when a comment is created/deleted
                     (
                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['commentCount']) ||
-                      request.resource.data.commentCount == resource.data.commentCount + 1 ||
-                      request.resource.data.commentCount == resource.data.commentCount - 1
+                      (request.resource.data.commentCount == resource.data.commentCount + 1) ||
+                      (request.resource.data.commentCount == resource.data.commentCount - 1)
                     ) &&
-                    // Judgement can only change by 1 or -1
+                    // Judgement can only change by 1 or -1 AND must be accompanied by a judgement document change
                     (
                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['judgement']) ||
                       (
-                        (getJudgementVal(request.resource.data, 'right') == getJudgementVal(resource.data, 'right') + 1 || getJudgementVal(request.resource.data, 'right') == getJudgementVal(resource.data, 'right') - 1 || getJudgementVal(request.resource.data, 'right') == getJudgementVal(resource.data, 'right')) &&
-                        (getJudgementVal(request.resource.data, 'wrong') == getJudgementVal(resource.data, 'wrong') + 1 || getJudgementVal(request.resource.data, 'wrong') == getJudgementVal(resource.data, 'wrong') - 1 || getJudgementVal(request.resource.data, 'wrong') == getJudgementVal(resource.data, 'wrong'))
+                        (
+                          getJudgementVal(request.resource.data, 'right') == getJudgementVal(resource.data, 'right') + 1 &&
+                          !exists(/databases/$(database)/documents/confessions/$(confessionId)/judgements/$(request.auth.uid)) &&
+                          getAfter(/databases/$(database)/documents/confessions/$(confessionId)/judgements/$(request.auth.uid)).data.vote == 'right'
+                        ) ||
+                        (
+                          getJudgementVal(request.resource.data, 'right') == getJudgementVal(resource.data, 'right') - 1 &&
+                          exists(/databases/$(database)/documents/confessions/$(confessionId)/judgements/$(request.auth.uid)) &&
+                          resource.data.judgement.right > 0 &&
+                          getAfter(/databases/$(database)/documents/confessions/$(confessionId)/judgements/$(request.auth.uid)) == null
+                        ) ||
+                        (getJudgementVal(request.resource.data, 'right') == getJudgementVal(resource.data, 'right'))
+                      ) &&
+                      (
+                        (
+                          getJudgementVal(request.resource.data, 'wrong') == getJudgementVal(resource.data, 'wrong') + 1 &&
+                          !exists(/databases/$(database)/documents/confessions/$(confessionId)/judgements/$(request.auth.uid)) &&
+                          getAfter(/databases/$(database)/documents/confessions/$(confessionId)/judgements/$(request.auth.uid)).data.vote == 'wrong'
+                        ) ||
+                        (
+                          getJudgementVal(request.resource.data, 'wrong') == getJudgementVal(resource.data, 'wrong') - 1 &&
+                          exists(/databases/$(database)/documents/confessions/$(confessionId)/judgements/$(request.auth.uid)) &&
+                          resource.data.judgement.wrong > 0 &&
+                          getAfter(/databases/$(database)/documents/confessions/$(confessionId)/judgements/$(request.auth.uid)) == null
+                        ) ||
+                        (getJudgementVal(request.resource.data, 'wrong') == getJudgementVal(resource.data, 'wrong'))
                       )
                     );
                     
@@ -174,8 +213,12 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
       allow create: if isAuthenticated() &&
                     request.resource.data.confessionId is string &&
+                    (!('commentId' in request.resource.data) || request.resource.data.commentId is string) &&
+                    (!('type' in request.resource.data) || request.resource.data.type in ['confession', 'comment']) &&
                     request.resource.data.reportedBy == request.auth.uid &&
                     request.resource.data.reason is string &&
+                    request.resource.data.reason.size() > 0 &&
+                    request.resource.data.reason.size() <= 500 &&
                     request.resource.data.status == 'pending' &&
                     request.resource.data.createdAt is timestamp;
     }

@@ -39,13 +39,35 @@
     },
     "UserProfile": {
       "title": "UserProfile",
-      "description": "User profile with nickname for chat.",
+      "description": "User profile with nickname, bio, gender, and marital status.",
       "type": "object",
       "properties": {
         "nickname": { "type": "string" },
+        "bio": { "type": "string" },
+        "gender": { "type": "string" },
+        "maritalStatus": { "type": "string" },
+        "avatar": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "isVerified": { "type": "boolean" },
+        "lastActive": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["nickname", "createdAt"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "A report of a confession or comment.",
+      "type": "object",
+      "properties": {
+        "confessionId": { "type": "string" },
+        "commentId": { "type": "string" },
+        "reportedBy": { "type": "string" },
+        "reason": { "type": "string" },
+        "type": { "type": "string", "enum": ["confession", "comment"] },
+        "status": { "type": "string", "enum": ["pending", "ignored", "resolved"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["confessionId", "reportedBy", "reason", "status", "createdAt"]
     },
     "Chat": {
       "title": "Chat",
@@ -96,6 +118,10 @@
     "/confessions/{confessionId}/likes/{userId}": {
       "schema": { "$ref": "#/entities/Like" },
       "description": "Tracks likes per user for a confession."
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/Report" },
+      "description": "Stores reports for moderation."
     }
   }
 }

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CATEGORIES } from '../types';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { Send, X, ShieldAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { containsProfanity, filterProfanity } from '../lib/filter';
@@ -59,8 +59,7 @@ export default function CreateConfession({ onClose }: CreateConfessionProps) {
       await addDoc(collection(db, 'confessions'), confessionData);
       onClose();
     } catch (err) {
-      console.error("Error creating confession:", err);
-      setError('Ocorreu um erro ao postar sua confissão. Tente novamente.');
+      handleFirestoreError(err, OperationType.WRITE, 'confessions');
     } finally {
       setIsSubmitting(false);
     }

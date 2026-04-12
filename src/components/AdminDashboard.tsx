@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, ShieldAlert, Trash2, UserX, CheckCircle, AlertTriangle } from 'lucide-react';
-import { db } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -163,21 +163,45 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
   const handleBanUser = async (reportId: string, targetId: string, authorId: string, isComment: boolean) => {
     setActionLoading(reportId);
     try {
-      const batch = writeBatch(db);
       if (authorId) {
-        batch.delete(doc(db, 'users', authorId));
-      }
-      if (isComment) {
-        batch.delete(doc(db, 'comments', targetId));
+        // Delete user profile
+        await writeBatch(db).delete(doc(db, 'users', authorId)).commit();
+        
+        // Fetch all confessions by this user
+        const confessionsQuery = query(collection(db, 'confessions'), where('authorId', '==', authorId));
+        const confessionsSnap = await getDocs(confessionsQuery);
+        
+        // Fetch all comments by this user
+        const commentsQuery = query(collection(db, 'comments'), where('authorId', '==', authorId));
+        const commentsSnap = await getDocs(commentsQuery);
+
+        const allDocsToDelete = [
+          ...confessionsSnap.docs,
+          ...commentsSnap.docs
+        ];
+
+        // Delete in chunks of 450 (to be safe with the 500 limit)
+        for (let i = 0; i < allDocsToDelete.length; i += 450) {
+          const batch = writeBatch(db);
+          const chunk = allDocsToDelete.slice(i, i + 450);
+          chunk.forEach(d => batch.delete(d.ref));
+          await batch.commit();
+        }
       } else {
-        batch.delete(doc(db, 'confessions', targetId));
+        // If no authorId, just delete the target
+        const batch = writeBatch(db);
+        if (isComment) {
+          batch.delete(doc(db, 'comments', targetId));
+        } else {
+          batch.delete(doc(db, 'confessions', targetId));
+        }
+        await batch.commit();
       }
-      batch.update(doc(db, 'reports', reportId), { status: 'resolved' });
-      await batch.commit();
+
+      await updateDoc(doc(db, 'reports', reportId), { status: 'resolved' });
       setReports(prev => prev.filter(r => r.id !== reportId));
     } catch (error) {
-      console.error("Erro ao banir usuário:", error);
-      alert("Erro ao banir usuário.");
+      handleFirestoreError(error, OperationType.WRITE, `reports/${reportId}`);
     } finally {
       setActionLoading(null);
       setConfirmAction(null);

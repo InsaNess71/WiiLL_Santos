@@ -79,3 +79,11 @@ export const AVATARS = [
 ];
 
 export const ADMIN_AVATAR = `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="adminGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f472b6" /><stop offset="100%" stop-color="#831843" /></linearGradient><filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2" result="blur" /><feComposite in="SourceGraphic" in2="blur" operator="over" /></filter></defs><rect width="100" height="100" fill="url(#adminGrad)" /><g transform="translate(22, 22) scale(2.3)" fill="#ffffff" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"><path d="M9 10h.01"/><path d="M15 10h.01"/><path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" fill-opacity="0.2"/></g></svg>`)}`;
+
+export const REPORT_REASONS = [
+  'Conteúdo ofensivo ou discurso de ódio',
+  'Spam ou propaganda',
+  'Conteúdo sexualmente explícito',
+  'Incentivo à violência ou automutilação',
+  'Assédio ou bullying'
+];

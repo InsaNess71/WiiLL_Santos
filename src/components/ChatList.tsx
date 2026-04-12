@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { collection, query, where, onSnapshot, getDoc, doc } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { Chat, UserProfile } from '../types';
 import { MessageSquare, Clock, Ghost, User } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -63,6 +63,8 @@ const ChatList = memo(function ChatList({ activeChatId, setActiveChatId }: ChatL
 
       setChats(resolvedChats);
       setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'chats');
     });
 
     return () => unsubscribe();

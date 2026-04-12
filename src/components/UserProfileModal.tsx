@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { X, MessageSquare, User, Edit2, Save, FileText, Shield, LogOut, Trash2, ShieldCheck } from 'lucide-react';
-import { db, auth, logOut } from '../firebase';
+import { db, auth, logOut, handleFirestoreError, OperationType } from '../firebase';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Confession, UserProfile, AVATARS, ADMIN_AVATAR } from '../types';
 import { formatDistanceToNow } from 'date-fns';
@@ -73,7 +73,7 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
         
         setConfessions(userConfessions);
       } catch (error) {
-        console.error("Error fetching profile:", error);
+        handleFirestoreError(error, OperationType.GET, `users/${userId}`);
       } finally {
         setLoading(false);
       }

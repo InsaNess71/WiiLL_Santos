@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { motion } from 'motion/react';
 import { ShieldAlert, ArrowRight } from 'lucide-react';
 import { ADMIN_AVATAR } from '../types';
@@ -51,8 +51,7 @@ export default function NicknameModal({ onComplete }: NicknameModalProps) {
       await setDoc(doc(db, 'users', auth.currentUser.uid), userData);
       onComplete();
     } catch (err) {
-      console.error('Error setting nickname:', err);
-      setError('Erro ao salvar nickname. Tente novamente.');
+      handleFirestoreError(err, OperationType.WRITE, `users/${auth.currentUser?.uid}`);
       setIsSubmitting(false);
     }
   };

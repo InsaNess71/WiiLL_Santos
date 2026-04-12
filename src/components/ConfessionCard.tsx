@@ -1,11 +1,11 @@
 import { useState, useEffect, memo } from 'react';
-import { Confession, UserProfile } from '../types';
-import { Heart, MessageCircle, Share2, User, Trash2, AlertTriangle, Flag, ShieldCheck } from 'lucide-react';
+import { Confession, UserProfile, REPORT_REASONS } from '../types';
+import { Heart, MessageCircle, Share2, User, Trash2, AlertTriangle, Flag, ShieldCheck, Flame } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '../lib/utils';
 import { doc, updateDoc, increment, setDoc, deleteDoc, getDoc, writeBatch, collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import CommentSection from './CommentSection';
 import UserProfileModal from './UserProfileModal';
@@ -179,7 +179,7 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
     try {
       await deleteDoc(doc(db, 'confessions', confession.id));
     } catch (error) {
-      console.error("Error deleting confession:", error);
+      handleFirestoreError(error, OperationType.WRITE, `confessions/${confession.id}`);
       setIsDeleting(false);
       setShowDeleteConfirm(false);
     }
@@ -187,14 +187,6 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
 
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('');
-
-  const REPORT_REASONS = [
-    'Conteúdo ofensivo ou discurso de ódio',
-    'Spam ou propaganda',
-    'Conteúdo sexualmente explícito',
-    'Incentivo à violência ou automutilação',
-    'Assédio ou bullying'
-  ];
 
   const handleReport = async () => {
     if (!auth.currentUser || hasReported || isReporting || !reportReason) return;
@@ -214,7 +206,7 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
         btn.innerHTML = '<span class="text-xs text-red-500">Denunciado</span>';
       }
     } catch (error) {
-      console.error("Error reporting:", error);
+      handleFirestoreError(error, OperationType.WRITE, 'reports');
     } finally {
       setIsReporting(false);
     }
@@ -254,6 +246,12 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
               <span className="text-[10px] uppercase tracking-wider font-medium text-pink-500">
                 {confession.category}
               </span>
+              {confession.likes >= 10 && (
+                <span className="flex items-center space-x-1 bg-orange-500/10 text-orange-500 text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                  <Flame className="w-3 h-3" />
+                  <span>Em alta</span>
+                </span>
+              )}
               {(confession.age || confession.gender) && (
                 <span className="text-[10px] text-zinc-500">
                   • {confession.age ? `${confession.age}a` : ''} {confession.gender ? `(${confession.gender})` : ''}

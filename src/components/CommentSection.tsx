@@ -1,16 +1,9 @@
 import React, { useState, useEffect, memo } from 'react';
 import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, getDoc, writeBatch, deleteDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase';
-import { Comment, UserProfile } from '../types';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { Comment, UserProfile, REPORT_REASONS } from '../types';
 import { Send, User, ShieldAlert, Heart, Trophy, ShieldCheck, Trash2, Bot, Sparkles, AlertTriangle, X } from 'lucide-react';
 
-const REPORT_REASONS = [
-  'Conteúdo ofensivo ou discurso de ódio',
-  'Spam ou propaganda',
-  'Conteúdo sexualmente explícito',
-  'Incentivo à violência ou automutilação',
-  'Assédio ou bullying'
-];
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import UserProfileModal from './UserProfileModal';
@@ -416,6 +409,8 @@ export default function CommentSection({ confessionId, confessionText }: { confe
       });
       
       setComments(commentsData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'comments');
     });
 
     return () => unsubscribe();
@@ -510,10 +505,7 @@ export default function CommentSection({ confessionId, confessionText }: { confe
       }
 
     } catch (error) {
-      console.error("Error adding comment:", error);
-      setError('Erro ao enviar comentário.');
-      setIsSubmitting(false);
-      setIsAILoading(false);
+      handleFirestoreError(error, OperationType.WRITE, `comments`);
     } finally {
       if (!isAskingAI) {
         setIsSubmitting(false);
@@ -537,6 +529,25 @@ export default function CommentSection({ confessionId, confessionText }: { confe
           <span>{isAILoading ? 'Pensando...' : 'Pedir Conselho'}</span>
         </button>
       </div>
+
+      {!comments.some(c => c.isAI) && !isAILoading && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-indigo-500/5 border border-indigo-500/10 rounded-xl p-3 flex items-center justify-between"
+        >
+          <div className="flex items-center space-x-2">
+            <Bot className="w-4 h-4 text-indigo-400" />
+            <p className="text-[11px] text-indigo-300/80">Precisa de uma perspectiva diferente? Peça um conselho à nossa IA!</p>
+          </div>
+          <button 
+            onClick={handleRequestAdvice}
+            className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider hover:text-indigo-300 transition-colors"
+          >
+            Pedir agora
+          </button>
+        </motion.div>
+      )}
 
       {error && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2 flex items-center space-x-2 text-red-400">

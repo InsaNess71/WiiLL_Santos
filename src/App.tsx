@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { collection, query, orderBy, onSnapshot, limit, where, getDoc, getDocs, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db, auth, signInAnonymouslyUser, signInWithGoogle, logOut, getMessagingInstance } from './firebase';
+import { collection, query, orderBy, onSnapshot, limit, where, getDoc, getDocs, doc, updateDoc, setDoc, serverTimestamp, startAt, endAt } from 'firebase/firestore';
+import { db, auth, signInAnonymouslyUser, signInWithGoogle, logOut, getMessagingInstance, handleFirestoreError, OperationType } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getToken, onMessage } from 'firebase/messaging';
 import { Confession, CATEGORIES, Chat, UserProfile, ADMIN_AVATAR } from './types';
@@ -9,6 +9,7 @@ import CreateConfession from './components/CreateConfession';
 import NicknameModal from './components/NicknameModal';
 import ChatList from './components/ChatList';
 import InstallPrompt from './components/InstallPrompt';
+import SkeletonCard from './components/SkeletonCard';
 import UserProfileModal from './components/UserProfileModal';
 import SplashScreen from './components/SplashScreen';
 import PrivacyPolicy from './components/PrivacyPolicy';
@@ -98,6 +99,7 @@ export default function App() {
   const [showTerms, setShowTerms] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [isFeedLoading, setIsFeedLoading] = useState(true);
   const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
@@ -141,13 +143,21 @@ export default function App() {
 
     const fetchUsers = async () => {
       try {
-        const q = query(collection(db, 'users'), limit(100));
+        // Use range query for prefix matching (case-sensitive by default in Firestore)
+        // For better results, we'd store a lowercase version of the nickname, 
+        // but for now we'll do a simple prefix match on the original field.
+        const q = query(
+          collection(db, 'users'), 
+          orderBy('nickname'),
+          startAt(searchQuery),
+          endAt(searchQuery + '\uf8ff'),
+          limit(20)
+        );
         const snap = await getDocs(q);
         const users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserProfile));
-        const filtered = users.filter(u => u.nickname?.toLowerCase().includes(searchQuery.toLowerCase()));
-        setSearchedUsers(filtered);
+        setSearchedUsers(users);
       } catch (err) {
-        console.error("Error searching users:", err);
+        handleFirestoreError(err, OperationType.LIST, 'users');
       }
     };
     
@@ -358,6 +368,7 @@ export default function App() {
 
   useEffect(() => {
     if (!isAuthReady) return;
+    setIsFeedLoading(true);
 
     let finalQuery;
 
@@ -420,6 +431,9 @@ export default function App() {
       }
 
       setConfessions(data);
+      setIsFeedLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'confessions');
     });
 
     return () => unsubscribe();
@@ -660,7 +674,11 @@ export default function App() {
 
               {searchQuery.trim() && <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-3">Confissões</h3>}
 
-              {filteredConfessions.length === 0 ? (
+              {isFeedLoading && confessions.length === 0 ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map(i => <SkeletonCard key={i} />)}
+                </div>
+              ) : filteredConfessions.length === 0 ? (
                 <div className="text-center py-20">
                   <Ghost className="w-12 h-12 text-zinc-800 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-zinc-400">Nenhuma confissão encontrada</h3>
