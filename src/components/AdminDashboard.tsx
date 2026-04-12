@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ShieldAlert, Trash2, UserX, CheckCircle, AlertTriangle } from 'lucide-react';
+import { X, ShieldAlert, Trash2, UserX, CheckCircle, AlertTriangle, Ghost } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
 import { formatDistanceToNow } from 'date-fns';
@@ -31,7 +31,7 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
-    type: 'delete_confession' | 'delete_comment' | 'ban_user';
+    type: 'delete_confession' | 'delete_comment' | 'ban_user' | 'shadow_ban';
     reportId: string;
     targetId: string;
     authorId?: string;
@@ -154,6 +154,20 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
     } catch (error) {
       console.error("Erro ao excluir comentário:", error);
       alert("Erro ao excluir comentário.");
+    } finally {
+      setActionLoading(null);
+      setConfirmAction(null);
+    }
+  };
+
+  const handleShadowBan = async (reportId: string, authorId: string) => {
+    setActionLoading(reportId);
+    try {
+      await updateDoc(doc(db, 'users', authorId), { isShadowBanned: true });
+      await updateDoc(doc(db, 'reports', reportId), { status: 'resolved' });
+      setReports(prev => prev.filter(r => r.id !== reportId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `users/${authorId}`);
     } finally {
       setActionLoading(null);
       setConfirmAction(null);
@@ -323,6 +337,22 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                             <span>Banir Usuário</span>
                           </button>
                         )}
+
+                        {report.authorId && (
+                          <button
+                            onClick={() => setConfirmAction({ 
+                              type: 'shadow_ban', 
+                              reportId: report.id, 
+                              targetId: report.type === 'comment' ? report.commentId! : report.confessionId,
+                              authorId: report.authorId
+                            })}
+                            disabled={actionLoading === report.id}
+                            className="px-4 py-2 rounded-lg text-sm font-medium text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 transition-colors flex items-center space-x-2 disabled:opacity-50"
+                          >
+                            <Ghost className="w-4 h-4" />
+                            <span>Shadow Ban</span>
+                          </button>
+                        )}
                       </>
                     )}
                   </div>
@@ -346,6 +376,8 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                 <p className="text-sm text-zinc-400 mb-6">
                   {confirmAction.type === 'ban_user' 
                     ? "Tem certeza que deseja BANIR este usuário e excluir o conteúdo?" 
+                    : confirmAction.type === 'shadow_ban'
+                    ? "Shadow Ban: O usuário continuará postando, mas NINGUÉM verá o conteúdo dele. Deseja prosseguir?"
                     : `Tem certeza que deseja excluir este ${confirmAction.type === 'delete_comment' ? 'comentário' : 'confissão'}?`}
                 </p>
                 
@@ -364,6 +396,8 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                         handleDeleteComment(confirmAction.reportId, confirmAction.targetId);
                       } else if (confirmAction.type === 'ban_user') {
                         handleBanUser(confirmAction.reportId, confirmAction.targetId, confirmAction.authorId!, reports.find(r => r.id === confirmAction.reportId)?.type === 'comment');
+                      } else if (confirmAction.type === 'shadow_ban') {
+                        handleShadowBan(confirmAction.reportId, confirmAction.authorId!);
                       }
                     }}
                     className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-red-600 hover:bg-red-700 transition-colors"

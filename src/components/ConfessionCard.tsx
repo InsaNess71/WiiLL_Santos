@@ -1,6 +1,7 @@
-import { useState, useEffect, memo } from 'react';
+import { useState, useEffect, memo, useRef } from 'react';
 import { Confession, UserProfile, REPORT_REASONS } from '../types';
-import { Heart, MessageCircle, Share2, User, Trash2, AlertTriangle, Flag, ShieldCheck, Flame } from 'lucide-react';
+import { Heart, MessageCircle, Share2, User, Trash2, AlertTriangle, Flag, ShieldCheck, Flame, Download } from 'lucide-react';
+import { toPng } from 'html-to-image';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '../lib/utils';
@@ -150,6 +151,31 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
     }
   };
 
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportImage = async () => {
+    if (!cardRef.current || isExporting) return;
+    setIsExporting(true);
+    try {
+      const dataUrl = await toPng(cardRef.current, {
+        cacheBust: true,
+        backgroundColor: '#09090b',
+        style: {
+          borderRadius: '0px',
+        }
+      });
+      const link = document.createElement('a');
+      link.download = `confissao-${confession.id.slice(0, 5)}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error('Error exporting image:', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handleShare = async () => {
     const shareText = `Confissão de ${authorNickname}: "${confession.text}"\n\nLeia mais no app!`;
     if (navigator.share) {
@@ -214,14 +240,20 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
 
   return (
     <motion.div 
+      ref={cardRef}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className={cn(
-        "bg-zinc-900 border rounded-2xl p-5 mb-4 shadow-xl relative",
+        "border rounded-2xl p-5 mb-4 shadow-xl relative overflow-hidden",
+        confession.background ? confession.background : "bg-zinc-900",
         authorProfile?.role === 'admin' ? "border-pink-500/50 shadow-pink-500/10" : "border-zinc-800"
       )}
     >
-      <div className="flex items-center justify-between mb-4">
+      {confession.background && (
+        <div className="absolute inset-0 bg-black/20 pointer-events-none" />
+      )}
+      <div className="relative z-10">
+        <div className="flex items-center justify-between mb-4">
         <button 
           onClick={() => setShowProfile(true)}
           className="flex items-center space-x-3 hover:opacity-80 transition-opacity text-left"
@@ -345,9 +377,18 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
 
         <div className="flex items-center space-x-3">
           <button 
+            onClick={handleExportImage}
+            disabled={isExporting}
+            className="flex items-center space-x-1.5 text-sm text-zinc-400 hover:text-pink-400 transition-colors disabled:opacity-50"
+            title="Exportar como Imagem"
+          >
+            <Download className="w-5 h-5" />
+          </button>
+
+          <button 
             onClick={handleShare}
             className="flex items-center space-x-1.5 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
-            title="Compartilhar"
+            title="Compartilhar Link"
           >
             {isCopied ? (
               <span className="text-xs text-green-500 font-medium">Copiado!</span>
@@ -372,7 +413,11 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
 
       {showComments && (
         <div className="mt-4 pt-4 border-t border-zinc-800">
-          <CommentSection confessionId={confession.id} confessionText={confession.text} />
+          <CommentSection 
+            confessionId={confession.id} 
+            confessionText={confession.text} 
+            confessionAuthorId={confession.authorId}
+          />
         </div>
       )}
 
@@ -470,6 +515,7 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
     </motion.div>
   );
 });

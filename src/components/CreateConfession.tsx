@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CATEGORIES } from '../types';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, getDoc, doc } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { Send, X, ShieldAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -16,7 +16,19 @@ export default function CreateConfession({ onClose }: CreateConfessionProps) {
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [age, setAge] = useState('');
   const [gender, setGender] = useState('');
+  const [background, setBackground] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const BACKGROUNDS = [
+    { name: 'Padrão', value: '' },
+    { name: 'Rosa', value: 'bg-gradient-to-br from-pink-600 to-rose-800' },
+    { name: 'Roxo', value: 'bg-gradient-to-br from-purple-600 to-indigo-800' },
+    { name: 'Azul', value: 'bg-gradient-to-br from-blue-600 to-cyan-800' },
+    { name: 'Verde', value: 'bg-gradient-to-br from-emerald-600 to-teal-800' },
+    { name: 'Laranja', value: 'bg-gradient-to-br from-orange-500 to-red-700' },
+    { name: 'Noite', value: 'bg-gradient-to-br from-zinc-800 to-black' },
+    { name: 'Galáxia', value: 'bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900' },
+  ];
   const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,12 +55,18 @@ export default function CreateConfession({ onClose }: CreateConfessionProps) {
       // 2. Filter profanity and save
       const filteredText = filterProfanity(text.trim());
       
+      // 3. Check if user is shadow banned
+      const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+      const isShadowBanned = userDoc.exists() && userDoc.data().isShadowBanned === true;
+      
       const confessionData: any = {
         text: filteredText,
         category,
         likes: 0,
         commentCount: 0,
         judgement: { right: 0, wrong: 0 },
+        background,
+        isHidden: isShadowBanned,
         createdAt: serverTimestamp(),
         authorId: auth.currentUser.uid
       };
@@ -138,6 +156,26 @@ export default function CreateConfession({ onClose }: CreateConfessionProps) {
                 maxLength={50}
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-zinc-100 focus:outline-none focus:border-pink-500/50 focus:ring-1 focus:ring-pink-500/50"
               />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">Estilo do Card</label>
+            <div className="flex flex-wrap gap-2">
+              {BACKGROUNDS.map((bg) => (
+                <button
+                  key={bg.name}
+                  type="button"
+                  onClick={() => setBackground(bg.value)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                    background === bg.value 
+                      ? 'border-pink-500 bg-pink-500/20 text-pink-100' 
+                      : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
+                  }`}
+                >
+                  {bg.name}
+                </button>
+              ))}
             </div>
           </div>
 

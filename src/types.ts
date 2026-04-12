@@ -9,6 +9,8 @@ export interface Confession {
   likes: number;
   commentCount: number;
   judgement?: { right: number, wrong: number };
+  background?: string;
+  isHidden?: boolean;
   createdAt: Timestamp | any; // Firestore Timestamp or FieldValue during creation
   authorId: string;
 }
@@ -21,6 +23,7 @@ export interface Comment {
   createdAt: Timestamp | any;
   authorId: string;
   isAI?: boolean;
+  isBest?: boolean;
 }
 
 export interface UserProfile {
@@ -34,6 +37,8 @@ export interface UserProfile {
   avatar?: string;
   role?: 'admin' | 'user';
   isVerified?: boolean;
+  isShadowBanned?: boolean;
+  karma?: number;
 }
 
 export interface Chat {

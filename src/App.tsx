@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { collection, query, orderBy, onSnapshot, limit, where, getDoc, getDocs, doc, updateDoc, setDoc, serverTimestamp, startAt, endAt } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, limit, where, getDoc, getDocs, doc, updateDoc, setDoc, serverTimestamp, startAt, endAt, or, and } from 'firebase/firestore';
 import { db, auth, signInAnonymouslyUser, signInWithGoogle, logOut, getMessagingInstance, handleFirestoreError, OperationType } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getToken, onMessage } from 'firebase/messaging';
@@ -372,16 +372,26 @@ export default function App() {
 
     let finalQuery;
 
+    // Base visibility filter for shadow ban
+    const visibilityFilter = or(
+      where('isHidden', '==', false),
+      where('authorId', '==', auth.currentUser?.uid || 'anonymous')
+    );
+
     // Avoid composite index requirements by separating where and orderBy
     if (selectedCategory) {
       finalQuery = query(
         collection(db, 'confessions'), 
-        where('category', '==', selectedCategory), 
+        and(
+          where('category', '==', selectedCategory),
+          visibilityFilter
+        ),
         limit(feedLimit)
       );
     } else if (sortBy === 'popular') {
       finalQuery = query(
         collection(db, 'confessions'), 
+        visibilityFilter,
         orderBy('likes', 'desc'), 
         limit(feedLimit)
       );
@@ -390,13 +400,17 @@ export default function App() {
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
       finalQuery = query(
         collection(db, 'confessions'), 
-        where('createdAt', '>=', oneWeekAgo),
+        and(
+          where('createdAt', '>=', oneWeekAgo),
+          visibilityFilter
+        ),
         orderBy('createdAt', 'desc'),
         limit(100) // Fetch recent ones to sort by likes in JS
       );
     } else {
       finalQuery = query(
         collection(db, 'confessions'), 
+        visibilityFilter,
         orderBy('createdAt', 'desc'), 
         limit(feedLimit)
       );

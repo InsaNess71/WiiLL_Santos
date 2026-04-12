@@ -1,5 +1,5 @@
 import React, { useState, useEffect, memo } from 'react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, getDoc, writeBatch, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, getDoc, writeBatch, deleteDoc, or, and } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { Comment, UserProfile, REPORT_REASONS } from '../types';
 import { Send, User, ShieldAlert, Heart, Trophy, ShieldCheck, Trash2, Bot, Sparkles, AlertTriangle, X } from 'lucide-react';
@@ -13,7 +13,7 @@ import { cn } from '../lib/utils';
 import { getUserProfile } from '../lib/userCache';
 import { generateCounselorResponse } from '../services/geminiService';
 
-const CommentItem = memo(function CommentItem({ comment, isBestComment, onReply }: { comment: Comment, isBestComment?: boolean, onReply?: () => void }) {
+const CommentItem = memo(function CommentItem({ comment, isBestComment, onReply, onMarkAsBest, canMarkAsBest }: { comment: Comment, isBestComment?: boolean, onReply?: () => void, onMarkAsBest?: () => void, canMarkAsBest?: boolean }) {
   const [authorProfile, setAuthorProfile] = useState<UserProfile | null>(null);
   const [authorNickname, setAuthorNickname] = useState<string>('Carregando...');
   const [showProfile, setShowProfile] = useState(false);
@@ -81,14 +81,18 @@ const CommentItem = memo(function CommentItem({ comment, isBestComment, onReply 
 
     try {
       const batch = writeBatch(db);
+      const authorRef = doc(db, 'users', comment.authorId);
+      
       if (isLiked) {
         batch.delete(likeRef);
         batch.update(commentRef, { likes: increment(-1) });
+        batch.update(authorRef, { karma: increment(-1) });
         await batch.commit();
         setIsLiked(false);
       } else {
         batch.set(likeRef, { createdAt: serverTimestamp() });
         batch.update(commentRef, { likes: increment(1) });
+        batch.update(authorRef, { karma: increment(1) });
         await batch.commit();
         setIsLiked(true);
       }
@@ -276,9 +280,25 @@ const CommentItem = memo(function CommentItem({ comment, isBestComment, onReply 
       <p className="text-zinc-300 text-sm ml-6 mb-2">{comment.text}</p>
       
       <div className="flex items-center justify-between">
-        <button onClick={onReply} className="text-xs text-zinc-500 hover:text-zinc-300 font-medium transition-colors ml-6">
-          Responder
-        </button>
+        <div className="flex items-center space-x-3 ml-6">
+          <button onClick={onReply} className="text-xs text-zinc-500 hover:text-zinc-300 font-medium transition-colors">
+            Responder
+          </button>
+          {canMarkAsBest && !comment.isBest && (
+            <button 
+              onClick={onMarkAsBest}
+              className="text-[10px] bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider hover:bg-yellow-500/20 transition-all"
+            >
+              Marcar como Melhor
+            </button>
+          )}
+          {comment.isBest && (
+            <div className="flex items-center space-x-1 text-yellow-500">
+              <Trophy className="w-3 h-3" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Melhor Resposta</span>
+            </div>
+          )}
+        </div>
         <button 
           onClick={handleLike}
           disabled={likeLoading}
@@ -375,7 +395,7 @@ const CommentItem = memo(function CommentItem({ comment, isBestComment, onReply 
   );
 });
 
-export default function CommentSection({ confessionId, confessionText }: { confessionId: string, confessionText: string }) {
+export default function CommentSection({ confessionId, confessionText, confessionAuthorId }: { confessionId: string, confessionText: string, confessionAuthorId: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -385,7 +405,13 @@ export default function CommentSection({ confessionId, confessionText }: { confe
   useEffect(() => {
     const q = query(
       collection(db, 'comments'),
-      where('confessionId', '==', confessionId)
+      and(
+        where('confessionId', '==', confessionId),
+        or(
+          where('isHidden', '==', false),
+          where('authorId', '==', auth.currentUser?.uid || 'anonymous')
+        )
+      )
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -417,6 +443,19 @@ export default function CommentSection({ confessionId, confessionText }: { confe
   }, [confessionId]);
 
   const bestCommentId = comments.length > 0 && (comments[0].likes || 0) > 0 ? comments[0].id : null;
+
+  const handleMarkAsBest = async (commentId: string, authorId: string) => {
+    if (!auth.currentUser || auth.currentUser.uid !== confessionAuthorId) return;
+    
+    try {
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'comments', commentId), { isBest: true });
+      batch.update(doc(db, 'users', authorId), { karma: increment(10) });
+      await batch.commit();
+    } catch (error) {
+      console.error("Error marking as best:", error);
+    }
+  };
 
   const handleRequestAdvice = async () => {
     if (!auth.currentUser || isAILoading) return;
@@ -464,6 +503,9 @@ export default function CommentSection({ confessionId, confessionText }: { confe
     const filteredText = filterProfanity(newComment.trim());
 
     try {
+      const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+      const isShadowBanned = userDoc.exists() && userDoc.data().isShadowBanned === true;
+
       const batch = writeBatch(db);
       
       const newCommentRef = doc(collection(db, 'comments'));
@@ -471,7 +513,8 @@ export default function CommentSection({ confessionId, confessionText }: { confe
         confessionId,
         text: filteredText,
         createdAt: serverTimestamp(),
-        authorId: auth.currentUser.uid
+        authorId: auth.currentUser.uid,
+        isHidden: isShadowBanned
       });
 
       const confessionRef = doc(db, 'confessions', confessionId);
@@ -565,6 +608,8 @@ export default function CommentSection({ confessionId, confessionText }: { confe
               comment={comment} 
               isBestComment={comment.id === bestCommentId}
               onReply={() => setNewComment(prev => prev ? `${prev} @Conselheiro ` : '@Conselheiro ')}
+              canMarkAsBest={auth.currentUser?.uid === confessionAuthorId}
+              onMarkAsBest={() => handleMarkAsBest(comment.id, comment.authorId)}
             />
           ))
         )}

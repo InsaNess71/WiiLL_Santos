@@ -221,6 +221,8 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
                   </div>
                   <div className="flex items-center space-x-2 mt-0.5">
                     <p className="text-sm text-zinc-500">{confessions.length} confissões</p>
+                    <span className="text-zinc-700">•</span>
+                    <p className="text-xs font-bold text-pink-500">{profile?.karma || 0} Karma</p>
                     {statusText && (
                       <>
                         <span className="text-zinc-700">•</span>

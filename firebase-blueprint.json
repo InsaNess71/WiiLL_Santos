@@ -11,6 +11,8 @@
         "gender": { "type": "string", "description": "Optional gender of the author." },
         "likes": { "type": "number", "description": "Number of likes." },
         "commentCount": { "type": "number", "description": "Number of comments." },
+        "background": { "type": "string", "description": "Optional background color or gradient." },
+        "isHidden": { "type": "boolean", "description": "Whether the confession is hidden (shadow ban)." },
         "createdAt": { "type": "string", "format": "date-time" },
         "authorId": { "type": "string", "description": "The UID of the author." }
       },
@@ -49,6 +51,8 @@
         "avatar": { "type": "string" },
         "role": { "type": "string", "enum": ["user", "admin"] },
         "isVerified": { "type": "boolean" },
+        "isShadowBanned": { "type": "boolean" },
+        "karma": { "type": "number", "description": "User reputation points." },
         "lastActive": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
