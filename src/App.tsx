@@ -1,22 +1,26 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { collection, query, orderBy, onSnapshot, limit, where, getDoc, getDocs, doc, updateDoc, setDoc, serverTimestamp, startAt, endAt, or, and } from 'firebase/firestore';
 import { db, auth, signInAnonymouslyUser, signInWithGoogle, logOut, getMessagingInstance, handleFirestoreError, OperationType } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getToken, onMessage } from 'firebase/messaging';
 import { Confession, CATEGORIES, Chat, UserProfile, ADMIN_AVATAR } from './types';
 import ConfessionCard from './components/ConfessionCard';
-import CreateConfession from './components/CreateConfession';
-import NicknameModal from './components/NicknameModal';
-import ChatList from './components/ChatList';
-import InstallPrompt from './components/InstallPrompt';
 import SkeletonCard from './components/SkeletonCard';
-import UserProfileModal from './components/UserProfileModal';
 import SplashScreen from './components/SplashScreen';
-import PrivacyPolicy from './components/PrivacyPolicy';
-import TermsOfUse from './components/TermsOfUse';
-import AdminDashboard from './components/AdminDashboard';
 import { Ghost, PenSquare, Flame, Clock, Filter, LogIn, MessageSquare, LogOut, User, Search, X, Trophy, Home, Bell, ShieldAlert, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
+// Lazy loaded components
+const CreateConfession = lazy(() => import('./components/CreateConfession'));
+const NicknameModal = lazy(() => import('./components/NicknameModal'));
+const ChatList = lazy(() => import('./components/ChatList'));
+const InstallPrompt = lazy(() => import('./components/InstallPrompt'));
+const UserProfileModal = lazy(() => import('./components/UserProfileModal'));
+const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
+const TermsOfUse = lazy(() => import('./components/TermsOfUse'));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const Onboarding = lazy(() => import('./components/Onboarding'));
+const RatingModal = lazy(() => import('./components/RatingModal'));
 
 type SortOption = 'recent' | 'popular' | 'top_week';
 
@@ -98,16 +102,52 @@ export default function App() {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showRating, setShowRating] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [isFeedLoading, setIsFeedLoading] = useState(true);
   const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
+    // Check if user has seen onboarding
+    const hasSeenOnboarding = localStorage.getItem('confissoes_onboarding_seen');
+    if (!hasSeenOnboarding) {
+      setShowOnboarding(true);
+    }
+
     const timer = setTimeout(() => {
       setShowSplash(false);
     }, 2000);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    // Check for rating prompt
+    if (auth.currentUser) {
+      const checkRating = async () => {
+        const hasRated = localStorage.getItem('confissoes_rated');
+        if (hasRated) return;
+
+        const q = query(collection(db, 'confessions'), where('authorId', '==', auth.currentUser?.uid));
+        const snap = await getDocs(q);
+        if (snap.size >= 3) {
+          // Only show if they haven't seen it in the last 7 days
+          const lastPrompt = localStorage.getItem('confissoes_rating_prompt_last');
+          const now = Date.now();
+          if (!lastPrompt || now - parseInt(lastPrompt) > 7 * 24 * 60 * 60 * 1000) {
+            setShowRating(true);
+            localStorage.setItem('confissoes_rating_prompt_last', now.toString());
+          }
+        }
+      };
+      checkRating();
+    }
+  }, [confessions]);
+
+  const handleOnboardingComplete = () => {
+    localStorage.setItem('confissoes_onboarding_seen', 'true');
+    setShowOnboarding(false);
+  };
 
   useEffect(() => {
     // Handle URL parameters for Play Store links and shortcuts
@@ -606,7 +646,9 @@ export default function App() {
 
       <main className="max-w-3xl mx-auto px-4 py-8">
         {showChats ? (
-          <ChatList activeChatId={activeChatId} setActiveChatId={setActiveChatId} />
+          <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-pink-500 border-t-transparent rounded-full animate-spin" /></div>}>
+            <ChatList activeChatId={activeChatId} setActiveChatId={setActiveChatId} />
+          </Suspense>
         ) : (
           <>
             {/* Filters & Categories */}
@@ -730,38 +772,42 @@ export default function App() {
         )}
       </main>
 
-      <AnimatePresence>
-        {showCreate && <CreateConfession onClose={() => setShowCreate(false)} />}
-        {needsNickname && <NicknameModal onComplete={() => setNeedsNickname(false)} />}
-        {showMyProfile && user && <UserProfileModal userId={user.uid} onClose={() => setShowMyProfile(false)} />}
-        {selectedUserId && <UserProfileModal userId={selectedUserId} onClose={() => setSelectedUserId(null)} />}
-        {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
-        {showTerms && <TermsOfUse onClose={() => setShowTerms(false)} />}
-        {showAdminDashboard && <AdminDashboard onClose={() => setShowAdminDashboard(false)} />}
-        
-        {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: -50, x: '-50%' }}
-            animate={{ opacity: 1, y: 0, x: '-50%' }}
-            exit={{ opacity: 0, y: -50, x: '-50%' }}
-            className="fixed top-20 left-1/2 z-[100] bg-zinc-800 border border-pink-500/50 shadow-2xl rounded-xl p-4 w-[90%] max-w-sm cursor-pointer"
-            onClick={() => {
-              setToast(null);
-              setShowChats(true);
-            }}
-          >
-            <div className="flex items-start space-x-3">
-              <div className="bg-pink-500/20 p-2 rounded-full shrink-0">
-                <MessageSquare className="w-5 h-5 text-pink-500" />
+      <Suspense fallback={null}>
+        <AnimatePresence>
+          {showCreate && <CreateConfession onClose={() => setShowCreate(false)} isPremium={currentUserProfile?.isPremium || false} />}
+          {needsNickname && <NicknameModal onComplete={() => setNeedsNickname(false)} />}
+          {showMyProfile && user && <UserProfileModal userId={user.uid} onClose={() => setShowMyProfile(false)} />}
+          {selectedUserId && <UserProfileModal userId={selectedUserId} onClose={() => setSelectedUserId(null)} />}
+          {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
+          {showTerms && <TermsOfUse onClose={() => setShowTerms(false)} />}
+          {showAdminDashboard && <AdminDashboard onClose={() => setShowAdminDashboard(false)} />}
+          {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
+          {showRating && <RatingModal onClose={() => setShowRating(false)} />}
+          
+          {toast && (
+            <motion.div
+              initial={{ opacity: 0, y: -50, x: '-50%' }}
+              animate={{ opacity: 1, y: 0, x: '-50%' }}
+              exit={{ opacity: 0, y: -50, x: '-50%' }}
+              className="fixed top-20 left-1/2 z-[100] bg-zinc-800 border border-pink-500/50 shadow-2xl rounded-xl p-4 w-[90%] max-w-sm cursor-pointer"
+              onClick={() => {
+                setToast(null);
+                setShowChats(true);
+              }}
+            >
+              <div className="flex items-start space-x-3">
+                <div className="bg-pink-500/20 p-2 rounded-full shrink-0">
+                  <MessageSquare className="w-5 h-5 text-pink-500" />
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <h4 className="text-sm font-bold text-zinc-100">{toast.title}</h4>
+                  <p className="text-xs text-zinc-400 mt-0.5 truncate">{toast.message}</p>
+                </div>
               </div>
-              <div className="flex-1 overflow-hidden">
-                <h4 className="text-sm font-bold text-zinc-100">{toast.title}</h4>
-                <p className="text-xs text-zinc-400 mt-0.5 truncate">{toast.message}</p>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </Suspense>
       
       {/* Bottom Menu for Mobile */}
       {user && (
@@ -823,7 +869,9 @@ export default function App() {
         }
       `}} />
 
-      <InstallPrompt />
+      <Suspense fallback={null}>
+        <InstallPrompt />
+      </Suspense>
 
       <AnimatePresence>
         {showScrollTop && (

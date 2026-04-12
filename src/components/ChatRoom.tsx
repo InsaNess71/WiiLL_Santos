@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, getDoc, setDoc, increment } from 'firebase/firestore';
-import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { db, auth, storage, handleFirestoreError, OperationType } from '../firebase';
 import { Chat, ChatMessage, UserProfile } from '../types';
-import { Send, Clock, AlertTriangle, ArrowLeft, User } from 'lucide-react';
+import { Send, Clock, AlertTriangle, ArrowLeft, User, Camera, Crown, Trash2, X, Upload, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import PremiumModal from './PremiumModal';
+import { getUserProfile } from '../lib/userCache';
 
 interface ChatRoomProps {
   chatId: string;
@@ -15,8 +18,24 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
   const [chat, setChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [otherUser, setOtherUser] = useState<UserProfile | null>(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const fetchProfiles = async () => {
+      if (auth.currentUser) {
+        const profile = await getUserProfile(auth.currentUser.uid);
+        setCurrentUserProfile(profile);
+      }
+    };
+    fetchProfiles();
+  }, []);
 
   useEffect(() => {
     const chatRef = doc(db, 'chats', chatId);
@@ -99,10 +118,12 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !auth.currentUser || !chat) return;
+    if ((!newMessage.trim() && !imageUrl) || !auth.currentUser || !chat || isUploading) return;
 
     const text = newMessage.trim();
+    const currentImageUrl = imageUrl;
     setNewMessage('');
+    setImageUrl('');
 
     try {
       const otherUserId = chat.participants.find(id => id !== auth.currentUser?.uid);
@@ -120,7 +141,7 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
           durationMode: '24h',
           expiresAt,
           updatedAt: serverTimestamp(),
-          lastMessage: text,
+          lastMessage: text || '📷 Foto',
           unreadCount: {
             [auth.currentUser.uid]: 0,
             [otherUserId!]: 1
@@ -130,7 +151,7 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
         // Update existing chat
         const updateData: any = {
           updatedAt: serverTimestamp(),
-          lastMessage: text
+          lastMessage: text || '📷 Foto'
         };
         
         if (otherUserId) {
@@ -141,12 +162,18 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
       }
 
       // Add the message
-      await addDoc(collection(db, 'chats', chatId, 'messages'), {
+      const messageData: any = {
         senderId: auth.currentUser.uid,
         text,
         createdAt: serverTimestamp(),
         isSystem: false
-      });
+      };
+
+      if (currentUserProfile?.isPremium && currentImageUrl) {
+        messageData.imageUrl = currentImageUrl;
+      }
+
+      await addDoc(collection(db, 'chats', chatId, 'messages'), messageData);
       
     } catch (error) {
       console.error("Error sending message:", error);
@@ -174,6 +201,61 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
       });
     } catch (error) {
       console.error("Error changing duration:", error);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !auth.currentUser) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('A imagem deve ter no máximo 5MB.');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    try {
+      const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+      const storageRef = ref(storage, `chats/${chatId}/${auth.currentUser.uid}/${fileName}`);
+      
+      console.log("Starting chat upload to:", storageRef.fullPath);
+      const uploadTask = uploadBytesResumable(storageRef, file);
+
+      uploadTask.on('state_changed', 
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setUploadProgress(progress);
+        }, 
+        (error) => {
+          console.error("Detailed chat upload error:", error);
+          let errorMessage = 'Erro ao enviar imagem.';
+          if (error.code === 'storage/unauthorized') {
+            errorMessage = 'Sem permissão. O Firebase Storage pode não estar ativado.';
+          } else {
+            errorMessage = `Erro (${error.code}): ${error.message}`;
+          }
+          alert(errorMessage);
+          setIsUploading(false);
+        }, 
+        async () => {
+          try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            setImageUrl(downloadURL);
+            setIsUploading(false);
+            setUploadProgress(100);
+          } catch (err: any) {
+            console.error("Error getting download URL:", err);
+            alert('Erro ao obter link da imagem: ' + err.message);
+            setIsUploading(false);
+          }
+        }
+      );
+    } catch (err: any) {
+      console.error("Error starting chat upload task:", err);
+      alert('Erro ao iniciar upload: ' + err.message);
+      setIsUploading(false);
     }
   };
 
@@ -252,7 +334,17 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
               return (
                 <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[75%] rounded-2xl px-4 py-2 ${isMe ? 'bg-pink-600 text-white rounded-tr-sm' : 'bg-zinc-800 text-zinc-100 rounded-tl-sm'}`}>
-                    <p className="text-sm">{msg.text}</p>
+                    {msg.imageUrl && (
+                      <div className="mb-2 rounded-lg overflow-hidden border border-white/10 bg-black/20">
+                        <img 
+                          src={msg.imageUrl} 
+                          alt="Imagem" 
+                          className="w-full h-auto max-h-[300px] object-contain"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    )}
+                    {msg.text && <p className="text-sm">{msg.text}</p>}
                     <span className={`text-[10px] mt-1 block ${isMe ? 'text-pink-200' : 'text-zinc-500'}`}>
                       {msg.createdAt?.toDate ? formatDistanceToNow(msg.createdAt.toDate(), { addSuffix: true, locale: ptBR }) : 'agora'}
                     </span>
@@ -267,7 +359,48 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
 
       {/* Input */}
       <div className="p-4 border-t border-zinc-800 bg-zinc-950/50">
+        {imageUrl && (
+          <div className="mb-3 relative inline-block">
+            <div className="w-20 h-20 rounded-xl overflow-hidden border border-zinc-700 bg-black">
+              <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
+            </div>
+            <button
+              onClick={() => setImageUrl('')}
+              className="absolute -top-2 -right-2 bg-zinc-800 text-white p-1 rounded-full border border-zinc-700 hover:bg-red-500 transition-colors"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
         <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
+          <input 
+            type="file" 
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            accept="image/*"
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              if (currentUserProfile?.isPremium) {
+                fileInputRef.current?.click();
+              } else {
+                setShowPremiumModal(true);
+              }
+            }}
+            disabled={isUploading}
+            className={`p-2.5 rounded-full transition-colors shrink-0 ${currentUserProfile?.isPremium ? 'text-pink-500 hover:bg-pink-500/10' : 'text-zinc-600 hover:text-yellow-500'}`}
+            title={currentUserProfile?.isPremium ? "Enviar Foto" : "Torne-se Premium para enviar fotos"}
+          >
+            {isUploading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : currentUserProfile?.isPremium ? (
+              <Camera className="w-5 h-5" />
+            ) : (
+              <Crown className="w-5 h-5" />
+            )}
+          </button>
           <input
             type="text"
             value={newMessage}
@@ -279,13 +412,14 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
           />
           <button
             type="submit"
-            disabled={!newMessage.trim() || isExpired}
+            disabled={(!newMessage.trim() && !imageUrl) || isExpired || isUploading}
             className="p-2.5 rounded-full bg-pink-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-pink-500 transition-colors shrink-0"
           >
             <Send className="w-4 h-4" />
           </button>
         </form>
       </div>
+      {showPremiumModal && <PremiumModal onClose={() => setShowPremiumModal(false)} />}
     </div>
   );
 }

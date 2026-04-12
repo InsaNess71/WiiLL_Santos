@@ -11,6 +11,7 @@ export interface Confession {
   judgement?: { right: number, wrong: number };
   background?: string;
   isHidden?: boolean;
+  imageUrl?: string;
   createdAt: Timestamp | any; // Firestore Timestamp or FieldValue during creation
   authorId: string;
 }
@@ -38,6 +39,7 @@ export interface UserProfile {
   role?: 'admin' | 'user';
   isVerified?: boolean;
   isShadowBanned?: boolean;
+  isPremium?: boolean;
   karma?: number;
 }
 
@@ -55,6 +57,7 @@ export interface ChatMessage {
   id: string;
   senderId: string;
   text: string;
+  imageUrl?: string;
   createdAt: Timestamp | any;
   isSystem: boolean;
 }

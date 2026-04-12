@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { X, MessageSquare, User, Edit2, Save, FileText, Shield, LogOut, Trash2, ShieldCheck } from 'lucide-react';
+import { X, MessageSquare, User, Edit2, Save, FileText, Shield, LogOut, Trash2, ShieldCheck, Crown } from 'lucide-react';
 import { db, auth, logOut, handleFirestoreError, OperationType } from '../firebase';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Confession, UserProfile, AVATARS, ADMIN_AVATAR } from '../types';
@@ -215,6 +215,9 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
                 <>
                   <div className="flex items-center space-x-2">
                     <h2 className="text-xl font-bold text-zinc-100">{nickname}</h2>
+                    {profile?.isPremium && (
+                      <Crown className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+                    )}
                     {profile?.isVerified && (
                       <ShieldCheck className="w-5 h-5 text-blue-400" />
                     )}

@@ -1,6 +1,6 @@
-import { useState, useEffect, memo, useRef } from 'react';
+import { useState, useEffect, memo, useRef, lazy, Suspense } from 'react';
 import { Confession, UserProfile, REPORT_REASONS } from '../types';
-import { Heart, MessageCircle, Share2, User, Trash2, AlertTriangle, Flag, ShieldCheck, Flame, Download } from 'lucide-react';
+import { Heart, MessageCircle, Share2, User, Trash2, AlertTriangle, Flag, ShieldCheck, Flame, Download, Crown } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -8,9 +8,11 @@ import { cn } from '../lib/utils';
 import { doc, updateDoc, increment, setDoc, deleteDoc, getDoc, writeBatch, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
-import CommentSection from './CommentSection';
-import UserProfileModal from './UserProfileModal';
 import { getUserProfile } from '../lib/userCache';
+
+// Lazy loaded components
+const CommentSection = lazy(() => import('./CommentSection'));
+const UserProfileModal = lazy(() => import('./UserProfileModal'));
 
 interface ConfessionCardProps {
   confession: Confession;
@@ -267,8 +269,11 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
           </div>
           <div>
             <div className="flex items-center space-x-1">
-              <p className={cn("text-sm font-bold", authorProfile?.role === 'admin' ? "text-pink-400" : "text-zinc-100")}>
-                {authorNickname}
+              <p className={cn("text-sm font-bold flex items-center space-x-1", authorProfile?.role === 'admin' ? "text-pink-400" : "text-zinc-100")}>
+                <span>{authorNickname}</span>
+                {authorProfile?.isPremium && (
+                  <Crown className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                )}
               </p>
               {authorProfile?.isVerified && (
                 <ShieldCheck className="w-4 h-4 text-blue-400" />
@@ -311,6 +316,17 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
       <p className="text-zinc-100 text-lg leading-relaxed mb-6 font-medium">
         "{confession.text}"
       </p>
+
+      {confession.imageUrl && (
+        <div className="mb-6 rounded-xl overflow-hidden border border-zinc-800 bg-black/40">
+          <img 
+            src={confession.imageUrl} 
+            alt="Anexo da confissão" 
+            className="w-full h-auto max-h-[400px] object-contain mx-auto"
+            referrerPolicy="no-referrer"
+          />
+        </div>
+      )}
 
       <div className="bg-zinc-950/50 rounded-xl p-3 mb-4 border border-zinc-800/50">
         <p className="text-xs text-zinc-400 font-medium mb-2 text-center uppercase tracking-wider">Você acha isso:</p>
@@ -413,20 +429,24 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
 
       {showComments && (
         <div className="mt-4 pt-4 border-t border-zinc-800">
-          <CommentSection 
-            confessionId={confession.id} 
-            confessionText={confession.text} 
-            confessionAuthorId={confession.authorId}
-          />
+          <Suspense fallback={<div className="flex justify-center py-4"><div className="w-6 h-6 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" /></div>}>
+            <CommentSection 
+              confessionId={confession.id} 
+              confessionText={confession.text} 
+              confessionAuthorId={confession.authorId}
+            />
+          </Suspense>
         </div>
       )}
 
       <AnimatePresence>
         {showProfile && (
-          <UserProfileModal 
-            userId={confession.authorId} 
-            onClose={() => setShowProfile(false)} 
-          />
+          <Suspense fallback={null}>
+            <UserProfileModal 
+              userId={confession.authorId} 
+              onClose={() => setShowProfile(false)} 
+            />
+          </Suspense>
         )}
         
         {showDeleteConfirm && (
