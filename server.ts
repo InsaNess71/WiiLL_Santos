@@ -8,6 +8,12 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Ensure NODE_ENV is set to production for the shared app if not already set
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV = "production";
+}
+
 console.log("Server __dirname:", __dirname);
 console.log("Current working directory:", process.cwd());
 
@@ -32,10 +38,16 @@ try {
 }
 
 // Initialize Firebase Admin
-if (!admin.apps.length) {
-  admin.initializeApp({
-    projectId: firebaseConfig.projectId,
-  });
+try {
+  if (!admin.apps.length) {
+    console.log("Initializing Firebase Admin with Project ID:", firebaseConfig.projectId);
+    admin.initializeApp({
+      projectId: firebaseConfig.projectId,
+    });
+    console.log("Firebase Admin initialized successfully.");
+  }
+} catch (err) {
+  console.error("CRITICAL ERROR: Failed to initialize Firebase Admin:", err);
 }
 
 // Lazy Stripe initialization
@@ -54,18 +66,32 @@ function getStripe() {
 }
 
 async function startServer() {
-  console.log("Starting server...");
-  
-  // Initialize Firestore Admin
-  const db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId);
-  console.log("Firestore Admin initialized.");
-
-  if (!process.env.STRIPE_SECRET_KEY) {
-    console.warn("WARNING: STRIPE_SECRET_KEY is not set. Payments will fail.");
-  }
-
+  console.log("Starting server initialization...");
   const app = express();
   const PORT = 3000;
+
+  // Bind port immediately to satisfy cloud proxy health checks
+  const server = app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server is listening on 0.0.0.0:${PORT}`);
+    console.log(`Health check available at http://0.0.0.0:${PORT}/api/health`);
+  });
+
+  // Request logging middleware
+  app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+  });
+
+  // Initialize Firestore Admin
+  let db: admin.firestore.Firestore;
+  try {
+    db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId);
+    console.log("Firestore Admin initialized successfully.");
+  } catch (err) {
+    console.error("CRITICAL ERROR: Failed to initialize Firestore Admin:", err);
+    // We create a dummy db object to prevent crashes, but it will fail on calls
+    db = null as any;
+  }
 
   // Middleware
   app.use(express.json());
@@ -335,11 +361,6 @@ async function startServer() {
     res.status(500).json({ error: "Erro interno do servidor", details: err.message });
   });
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server is listening on 0.0.0.0:${PORT}`);
-    console.log(`Health check available at http://0.0.0.0:${PORT}/api/health`);
-  });
-
   // Keep-alive log
   setInterval(() => {
     console.log(`Server heartbeat - ${new Date().toISOString()} - Mode: ${process.env.NODE_ENV}`);
@@ -352,13 +373,14 @@ function serveStatic(app: express.Express) {
     console.log(`Serving static files from: ${distPath}`);
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
+      console.log(`Serving index.html for: ${req.url}`);
       res.sendFile(path.resolve(distPath, "index.html"));
     });
   } else {
     console.error("Static dist folder not found at", distPath);
     console.log("Current directory contents:", fs.readdirSync(__dirname));
     app.get("*", (req, res) => {
-      res.status(404).send("Application not built. Please run npm run build.");
+      res.status(200).send(`Servidor ativo, mas a pasta 'dist' não foi encontrada. Diretório atual: ${__dirname}. Conteúdo: ${fs.readdirSync(__dirname).join(", ")}`);
     });
   }
 }
