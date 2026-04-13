@@ -97,6 +97,11 @@ export default function CreateConfession({ onClose, isPremium }: CreateConfessio
     const file = e.target.files?.[0];
     if (!file || !auth.currentUser) return;
 
+    if (!isPremium) {
+      setShowPremiumModal(true);
+      return;
+    }
+
     if (!auth.currentUser) {
       setError('Você precisa estar logado para enviar fotos.');
       return;

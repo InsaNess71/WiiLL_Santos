@@ -36,3 +36,19 @@ export const updateUserCache = (userId: string, updatedData: Partial<UserProfile
     userCache.set(userId, updatedPromise);
   }
 };
+
+export const isPremiumActive = (profile: UserProfile | null): boolean => {
+  if (!profile) return false;
+  
+  // Admins have permanent premium access
+  if (profile.role === 'admin') return true;
+  
+  if (!profile.isPremium) return false;
+  if (!profile.premiumUntil) return true; // Legacy vitalício
+  
+  const expirationDate = profile.premiumUntil.toDate 
+    ? profile.premiumUntil.toDate() 
+    : new Date(profile.premiumUntil);
+    
+  return expirationDate > new Date();
+};

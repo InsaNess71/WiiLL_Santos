@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { X, MessageSquare, User, Edit2, Save, FileText, Shield, LogOut, Trash2, ShieldCheck, Crown } from 'lucide-react';
 import { db, auth, logOut, handleFirestoreError, OperationType } from '../firebase';
-import { doc, getDoc, collection, query, where, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { Confession, UserProfile, AVATARS, ADMIN_AVATAR } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import PrivacyPolicy from './PrivacyPolicy';
 import TermsOfUse from './TermsOfUse';
-import { getUserProfile, updateUserCache } from '../lib/userCache';
+import { getUserProfile, updateUserCache, isPremiumActive } from '../lib/userCache';
 
 interface UserProfileModalProps {
   userId: string;
@@ -33,22 +33,24 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
     avatar: ''
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [error, setError] = useState('');
   const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        if (auth.currentUser) {
-          const currentProfile = await getUserProfile(auth.currentUser.uid);
-          setCurrentUserProfile(currentProfile);
-        }
+    setLoading(true);
+    
+    // Fetch current user profile for admin/me checks
+    if (auth.currentUser) {
+      getUserProfile(auth.currentUser.uid).then(setCurrentUserProfile);
+    }
 
-        const userDoc = await getDoc(doc(db, 'users', userId));
-        if (userDoc.exists()) {
-          const data = userDoc.data() as UserProfile;
-          setProfile(data);
+    const unsubscribeProfile = onSnapshot(doc(db, 'users', userId), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data() as UserProfile;
+        setProfile(data);
+        if (!isEditing) {
           setEditForm({
             nickname: data.nickname || '',
             gender: data.gender || '',
@@ -57,7 +59,15 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
             avatar: data.avatar || ''
           });
         }
+      }
+      setLoading(false);
+    }, (err) => {
+      handleFirestoreError(err, OperationType.GET, `users/${userId}`);
+      setLoading(false);
+    });
 
+    const fetchConfessions = async () => {
+      try {
         const q = query(
           collection(db, 'confessions'),
           where('authorId', '==', userId)
@@ -73,12 +83,12 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
         
         setConfessions(userConfessions);
       } catch (error) {
-        handleFirestoreError(error, OperationType.GET, `users/${userId}`);
-      } finally {
-        setLoading(false);
+        console.error("Error fetching confessions:", error);
       }
     };
-    fetchProfile();
+    fetchConfessions();
+
+    return () => unsubscribeProfile();
   }, [userId]);
 
   const handleStartChat = async () => {
@@ -144,6 +154,7 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
 
   const isMe = auth.currentUser?.uid === userId;
   const isAdmin = currentUserProfile?.role === 'admin';
+  const isPremiumActiveStatus = isPremiumActive(profile);
   const nickname = profile?.nickname || 'Usuário Anônimo';
 
   const handleDeleteUser = async () => {
@@ -215,7 +226,7 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
                 <>
                   <div className="flex items-center space-x-2">
                     <h2 className="text-xl font-bold text-zinc-100">{nickname}</h2>
-                    {profile?.isPremium && (
+                    {isPremiumActiveStatus && (
                       <Crown className="w-5 h-5 text-yellow-500 fill-yellow-500" />
                     )}
                     {profile?.isVerified && (
@@ -339,6 +350,53 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
             </div>
           ) : (
             <>
+              {isMe && !isPremiumActiveStatus && (
+                <div className="mb-6 p-4 bg-gradient-to-br from-yellow-500/20 to-pink-500/20 border border-yellow-500/30 rounded-2xl">
+                  <div className="flex items-center space-x-3 mb-3">
+                    <div className="bg-yellow-500 p-2 rounded-lg">
+                      <Crown className="w-5 h-5 text-zinc-900" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-zinc-100">Seja Premium</h4>
+                      <p className="text-xs text-zinc-400">30 dias de acesso a recursos exclusivos.</p>
+                    </div>
+                  </div>
+                  <button
+                    disabled={isProcessingPayment}
+                    onClick={async () => {
+                      setIsProcessingPayment(true);
+                      setError('');
+                      try {
+                        const response = await fetch('/api/create-checkout-session', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ userId: auth.currentUser?.uid }),
+                        });
+                        const data = await response.json();
+                        if (data.url) {
+                          // Abre em uma nova aba para evitar o bloqueio do iframe
+                          window.open(data.url, '_blank');
+                        } else {
+                          throw new Error(data.error || 'Erro ao criar sessão');
+                        }
+                      } catch (err: any) {
+                        console.error(err);
+                        setError('Erro ao iniciar pagamento. Verifique suas chaves do Stripe.');
+                      } finally {
+                        setIsProcessingPayment(false);
+                      }
+                    }}
+                    className="w-full py-2.5 bg-yellow-500 hover:bg-yellow-400 text-zinc-900 font-bold rounded-xl transition-colors shadow-lg shadow-yellow-500/10 disabled:opacity-50 flex items-center justify-center space-x-2"
+                  >
+                    {isProcessingPayment ? (
+                      <div className="w-5 h-5 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <span>Assinar Premium - R$ 14,99 / mês</span>
+                    )}
+                  </button>
+                </div>
+              )}
+
               {(profile?.bio || profile?.gender || profile?.maritalStatus) && (
                 <div className="mb-6 space-y-4">
                   {profile.bio && (

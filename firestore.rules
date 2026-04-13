@@ -20,8 +20,9 @@ service cloud.firestore {
     }
 
     function isPremium() {
+      let user = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
       return isAuthenticated() && 
-             (isAdmin() || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isPremium == true));
+             (isAdmin() || (user.isPremium == true && (!('premiumUntil' in user) || user.premiumUntil > request.time)));
     }
 
     function getJudgementVal(data, key) {
@@ -72,6 +73,7 @@ service cloud.firestore {
              (!('isVerified' in data) || data.isVerified is bool) &&
              (!('isShadowBanned' in data) || data.isShadowBanned is bool) &&
              (!('isPremium' in data) || data.isPremium is bool) &&
+             (!('premiumUntil' in data) || data.premiumUntil is timestamp) &&
              (!('karma' in data) || data.karma is number);
     }
 
@@ -83,10 +85,10 @@ service cloud.firestore {
                     (!('isPremium' in request.resource.data) || request.resource.data.isPremium == false || isAdmin()) &&
                     (!('karma' in request.resource.data) || request.resource.data.karma == 0 || isAdmin());
       allow update: if (isOwner(userId) && 
-                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname', 'lastActive', 'gender', 'maritalStatus', 'bio', 'avatar', 'role', 'isVerified', 'isShadowBanned', 'isPremium', 'karma']) &&
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname', 'lastActive', 'gender', 'maritalStatus', 'bio', 'avatar', 'role', 'isVerified', 'isShadowBanned', 'isPremium', 'karma', 'premiumUntil']) &&
                     isValidProfile(request.resource.data) &&
                     (
-                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isVerified', 'isShadowBanned', 'karma']) ||
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isVerified', 'isShadowBanned', 'karma', 'isPremium', 'premiumUntil']) ||
                       isAdmin()
                     )) || 
                     // Allow karma updates for others (likes/best comment)

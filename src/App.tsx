@@ -9,6 +9,7 @@ import SkeletonCard from './components/SkeletonCard';
 import SplashScreen from './components/SplashScreen';
 import { Ghost, PenSquare, Flame, Clock, Filter, LogIn, MessageSquare, LogOut, User, Search, X, Trophy, Home, Bell, ShieldAlert, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { isPremiumActive } from './lib/userCache';
 
 // Lazy loaded components
 const CreateConfession = lazy(() => import('./components/CreateConfession'));
@@ -222,67 +223,66 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        try {
-          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-          if (!userDoc.exists()) {
-            setNeedsNickname(true);
-          } else {
-            const userData = userDoc.data() as UserProfile;
-            setCurrentUserProfile(userData);
-            
-            // Check if user is admin but doesn't have the role set
-            if (currentUser.email === 'wiillsantos16@gmail.com') {
-              if (userData.role !== 'admin' || !userData.isVerified) {
-                await updateDoc(doc(db, 'users', currentUser.uid), {
-                  role: 'admin',
-                  isVerified: true,
-                  // Only set default admin avatar if they don't have one
-                  ...(!userData.avatar ? { avatar: ADMIN_AVATAR } : {})
-                });
-                setCurrentUserProfile({ 
-                  ...userData, 
-                  role: 'admin', 
-                  isVerified: true,
-                  avatar: userData.avatar || ADMIN_AVATAR 
-                });
-              }
-            }
-          }
-
-          // Request FCM Token for Push Notifications
-          if ('Notification' in window) {
-            try {
-              const messaging = await getMessagingInstance();
-              if (messaging) {
-                const permission = await Notification.requestPermission();
-                if (permission === 'granted') {
-                  const token = await getToken(messaging, {
-                    vapidKey: 'BLwRpDenfvtAIFYVYCRAYM7tSZvpmnqqHmXl3qfeoaNadCo-LKgn33vHq0qJg7QHxBUc4zRKosfV_R8fD1k83lU' 
-                  });
-                  
-                  if (token) {
-                    await setDoc(doc(db, 'users', currentUser.uid, 'private', 'data'), {
-                      fcmToken: token
-                    }, { merge: true });
-                  }
-                }
-              }
-            } catch (err) {
-              console.error("Erro ao obter token FCM:", err);
-            }
-          }
-
-        } catch (error) {
-          console.error("Error checking user profile:", error);
-        }
-      }
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setIsAuthReady(true);
     });
-    return () => unsubscribe();
+    return () => unsubscribeAuth();
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setCurrentUserProfile(null);
+      return;
+    }
+
+    const unsubscribeProfile = onSnapshot(doc(db, 'users', user.uid), (snapshot) => {
+      if (snapshot.exists()) {
+        const userData = snapshot.data() as UserProfile;
+        setCurrentUserProfile(userData);
+        
+        if (user.email === 'wiillsantos16@gmail.com') {
+          if (userData.role !== 'admin' || !userData.isVerified) {
+            updateDoc(doc(db, 'users', user.uid), {
+              role: 'admin',
+              isVerified: true,
+              ...(!userData.avatar ? { avatar: ADMIN_AVATAR } : {})
+            });
+          }
+        }
+      } else {
+        setNeedsNickname(true);
+      }
+    });
+
+    // Request FCM Token for Push Notifications
+    if ('Notification' in window) {
+      const setupFCM = async () => {
+        try {
+          const messaging = await getMessagingInstance();
+          if (messaging) {
+            const permission = await Notification.requestPermission();
+            if (permission === 'granted') {
+              const token = await getToken(messaging, {
+                vapidKey: 'BLwRpDenfvtAIFYVYCRAYM7tSZvpmnqqHmXl3qfeoaNadCo-LKgn33vHq0qJg7QHxBUc4zRKosfV_R8fD1k83lU' 
+              });
+              
+              if (token) {
+                await setDoc(doc(db, 'users', user.uid, 'private', 'data'), {
+                  fcmToken: token
+                }, { merge: true });
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Erro ao obter token FCM:", err);
+        }
+      };
+      setupFCM();
+    }
+
+    return () => unsubscribeProfile();
+  }, [user]);
 
   // Listen for foreground messages
   useEffect(() => {
@@ -774,7 +774,7 @@ export default function App() {
 
       <Suspense fallback={null}>
         <AnimatePresence>
-          {showCreate && <CreateConfession onClose={() => setShowCreate(false)} isPremium={currentUserProfile?.isPremium || false} />}
+          {showCreate && <CreateConfession onClose={() => setShowCreate(false)} isPremium={isPremiumActive(currentUserProfile)} />}
           {needsNickname && <NicknameModal onComplete={() => setNeedsNickname(false)} />}
           {showMyProfile && user && <UserProfileModal userId={user.uid} onClose={() => setShowMyProfile(false)} />}
           {selectedUserId && <UserProfileModal userId={selectedUserId} onClose={() => setSelectedUserId(null)} />}

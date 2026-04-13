@@ -7,7 +7,7 @@ import { Send, Clock, AlertTriangle, ArrowLeft, User, Camera, Crown, Trash2, X, 
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import PremiumModal from './PremiumModal';
-import { getUserProfile } from '../lib/userCache';
+import { getUserProfile, isPremiumActive } from '../lib/userCache';
 
 interface ChatRoomProps {
   chatId: string;
@@ -169,7 +169,7 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
         isSystem: false
       };
 
-      if (currentUserProfile?.isPremium && currentImageUrl) {
+      if (isPremiumActive(currentUserProfile) && currentImageUrl) {
         messageData.imageUrl = currentImageUrl;
       }
 
@@ -207,6 +207,11 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !auth.currentUser) return;
+
+    if (!isPremiumActive(currentUserProfile)) {
+      setShowPremiumModal(true);
+      return;
+    }
 
     if (file.size > 5 * 1024 * 1024) {
       alert('A imagem deve ter no máximo 5MB.');
@@ -383,19 +388,19 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
           <button
             type="button"
             onClick={() => {
-              if (currentUserProfile?.isPremium) {
+              if (isPremiumActive(currentUserProfile)) {
                 fileInputRef.current?.click();
               } else {
                 setShowPremiumModal(true);
               }
             }}
             disabled={isUploading}
-            className={`p-2.5 rounded-full transition-colors shrink-0 ${currentUserProfile?.isPremium ? 'text-pink-500 hover:bg-pink-500/10' : 'text-zinc-600 hover:text-yellow-500'}`}
-            title={currentUserProfile?.isPremium ? "Enviar Foto" : "Torne-se Premium para enviar fotos"}
+            className={`p-2.5 rounded-full transition-colors shrink-0 ${isPremiumActive(currentUserProfile) ? 'text-pink-500 hover:bg-pink-500/10' : 'text-zinc-600 hover:text-yellow-500'}`}
+            title={isPremiumActive(currentUserProfile) ? "Enviar Foto" : "Torne-se Premium para enviar fotos"}
           >
             {isUploading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
-            ) : currentUserProfile?.isPremium ? (
+            ) : isPremiumActive(currentUserProfile) ? (
               <Camera className="w-5 h-5" />
             ) : (
               <Crown className="w-5 h-5" />

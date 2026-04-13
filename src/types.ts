@@ -40,6 +40,7 @@ export interface UserProfile {
   isVerified?: boolean;
   isShadowBanned?: boolean;
   isPremium?: boolean;
+  premiumUntil?: Timestamp | any;
   karma?: number;
 }
 

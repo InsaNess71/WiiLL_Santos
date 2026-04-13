@@ -17,20 +17,27 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
     setIsProcessing(true);
     
     try {
-      // Simulating payment processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-        isPremium: true
+      const response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: auth.currentUser.uid,
+        }),
       });
-      
-      setIsSuccess(true);
-      setTimeout(() => {
-        onClose();
-        window.location.reload(); // Refresh to update all UI
-      }, 2000);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `users/${auth.currentUser.uid}`);
+
+      const data = await response.json();
+
+      if (data.url) {
+        // Redirect to Stripe Checkout
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error || 'Erro ao criar sessão de pagamento');
+      }
+    } catch (error: any) {
+      console.error("Payment Error:", error);
+      alert("Erro ao iniciar pagamento: " + error.message);
     } finally {
       setIsProcessing(false);
     }
@@ -126,10 +133,10 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
                   disabled={isProcessing}
                   className="w-full py-5 bg-white text-zinc-950 rounded-2xl font-black text-lg hover:bg-zinc-100 transition-all shadow-xl shadow-white/5 active:scale-[0.98] disabled:opacity-50"
                 >
-                  {isProcessing ? 'Processando...' : 'Assinar por R$ 14,90/mês'}
+                  {isProcessing ? 'Processando...' : 'Assinar por R$ 29,90 (Único)'}
                 </button>
                 <p className="text-[10px] text-center text-zinc-600 px-8">
-                  Ao assinar, você concorda com nossos Termos de Uso. A renovação é automática e pode ser cancelada a qualquer momento na Play Store.
+                  Ao assinar, você concorda com nossos Termos de Uso. O acesso Premium é vitalício e não requer assinaturas mensais.
                 </p>
               </div>
             </>

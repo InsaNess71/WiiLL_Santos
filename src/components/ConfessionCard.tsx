@@ -8,7 +8,7 @@ import { cn } from '../lib/utils';
 import { doc, updateDoc, increment, setDoc, deleteDoc, getDoc, writeBatch, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
-import { getUserProfile } from '../lib/userCache';
+import { getUserProfile, isPremiumActive } from '../lib/userCache';
 
 // Lazy loaded components
 const CommentSection = lazy(() => import('./CommentSection'));
@@ -271,7 +271,7 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
             <div className="flex items-center space-x-1">
               <p className={cn("text-sm font-bold flex items-center space-x-1", authorProfile?.role === 'admin' ? "text-pink-400" : "text-zinc-100")}>
                 <span>{authorNickname}</span>
-                {authorProfile?.isPremium && (
+                {isPremiumActive(authorProfile) && (
                   <Crown className="w-3 h-3 text-yellow-500 fill-yellow-500" />
                 )}
               </p>
