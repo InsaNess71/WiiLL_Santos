@@ -557,7 +557,7 @@ export default function App() {
               </div>
               
               {!user ? (
-                <div className="hidden sm:flex items-center space-x-3">
+                <div className="flex items-center space-x-2 sm:space-x-3">
                   <button 
                     onClick={() => setShowSearch(true)}
                     className="p-2 rounded-full bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800 transition-colors"
@@ -567,7 +567,7 @@ export default function App() {
                   </button>
                   <button 
                     onClick={signInWithGoogle}
-                    className="flex items-center space-x-2 bg-white text-zinc-900 hover:bg-zinc-200 px-4 py-2 rounded-full text-sm font-medium transition-colors shadow-lg"
+                    className="flex items-center space-x-2 bg-white text-zinc-900 hover:bg-zinc-200 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-colors shadow-lg"
                     title="Salva seu perfil para não perder ao sair (Seu email ficará oculto)"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -576,15 +576,15 @@ export default function App() {
                       <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                       <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                     </svg>
-                    <span className="hidden sm:inline">Entrar com Google</span>
+                    <span>Entrar</span>
                   </button>
                   <button 
                     onClick={signInAnonymouslyUser}
-                    className="flex items-center space-x-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 rounded-full text-sm font-medium transition-colors border border-zinc-700"
+                    className="hidden sm:flex items-center space-x-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 rounded-full text-sm font-medium transition-colors border border-zinc-700"
                     title="Conta temporária (Você perde se deslogar)"
                   >
                     <Ghost className="w-4 h-4" />
-                    <span className="hidden sm:inline">Entrar como Visitante</span>
+                    <span>Visitante</span>
                   </button>
                 </div>
               ) : (
@@ -810,55 +810,69 @@ export default function App() {
       </Suspense>
       
       {/* Bottom Menu for Mobile */}
-      {user && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/90 backdrop-blur-lg border-t border-zinc-800 sm:hidden pb-safe">
-          <div className="flex items-center justify-around p-3">
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/90 backdrop-blur-lg border-t border-zinc-800 sm:hidden pb-safe">
+        <div className="flex items-center justify-around p-3">
+          <button 
+            onClick={() => { setShowChats(false); setShowMyProfile(false); }}
+            className={`flex flex-col items-center space-y-1 ${!showChats && !showMyProfile ? 'text-pink-500' : 'text-zinc-500 hover:text-zinc-300'}`}
+          >
+            <Home className="w-6 h-6" />
+            <span className="text-[10px] font-medium">Feed</span>
+          </button>
+          
+          <button 
+            onClick={() => setShowSearch(true)}
+            className={`flex flex-col items-center space-y-1 ${showSearch ? 'text-pink-500' : 'text-zinc-500 hover:text-zinc-300'}`}
+          >
+            <Search className="w-6 h-6" />
+            <span className="text-[10px] font-medium">Buscar</span>
+          </button>
+
+          {user ? (
+            <>
+              <button 
+                onClick={() => setShowCreate(true)}
+                className="flex flex-col items-center space-y-1 text-zinc-500 hover:text-zinc-300 relative -top-4"
+              >
+                <div className="bg-pink-600 text-white p-3 rounded-full shadow-lg shadow-pink-500/30">
+                  <PenSquare className="w-6 h-6" />
+                </div>
+              </button>
+              <button 
+                onClick={handleChatClick}
+                className={`flex flex-col items-center space-y-1 relative ${showChats ? 'text-pink-500' : 'text-zinc-500 hover:text-zinc-300'}`}
+              >
+                <div className="relative">
+                  <Bell className="w-6 h-6" />
+                  {totalUnread > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-pink-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
+                      {totalUnread > 99 ? '99+' : totalUnread}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] font-medium">Alertas</span>
+              </button>
+              <button 
+                onClick={() => setShowMyProfile(true)}
+                className={`flex flex-col items-center space-y-1 ${showMyProfile ? 'text-pink-500' : 'text-zinc-500 hover:text-zinc-300'}`}
+              >
+                <User className="w-6 h-6" />
+                <span className="text-[10px] font-medium">Perfil</span>
+              </button>
+            </>
+          ) : (
             <button 
-              onClick={() => { setShowChats(false); setShowMyProfile(false); }}
-              className={`flex flex-col items-center space-y-1 ${!showChats && !showMyProfile ? 'text-pink-500' : 'text-zinc-500 hover:text-zinc-300'}`}
-            >
-              <Home className="w-6 h-6" />
-              <span className="text-[10px] font-medium">Feed</span>
-            </button>
-            <button 
-              onClick={() => setShowSearch(true)}
+              onClick={signInWithGoogle}
               className="flex flex-col items-center space-y-1 text-zinc-500 hover:text-zinc-300"
             >
-              <Search className="w-6 h-6" />
-              <span className="text-[10px] font-medium">Buscar</span>
-            </button>
-            <button 
-              onClick={() => setShowCreate(true)}
-              className="flex flex-col items-center space-y-1 text-zinc-500 hover:text-zinc-300 relative -top-4"
-            >
-              <div className="bg-pink-600 text-white p-3 rounded-full shadow-lg shadow-pink-500/30">
-                <PenSquare className="w-6 h-6" />
+              <div className="bg-white text-zinc-900 p-2 rounded-full shadow-lg">
+                <LogIn className="w-5 h-5" />
               </div>
+              <span className="text-[10px] font-medium">Entrar</span>
             </button>
-            <button 
-              onClick={handleChatClick}
-              className={`flex flex-col items-center space-y-1 relative ${showChats ? 'text-pink-500' : 'text-zinc-500 hover:text-zinc-300'}`}
-            >
-              <div className="relative">
-                <Bell className="w-6 h-6" />
-                {totalUnread > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-pink-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
-                    {totalUnread > 99 ? '99+' : totalUnread}
-                  </span>
-                )}
-              </div>
-              <span className="text-[10px] font-medium">Alertas</span>
-            </button>
-            <button 
-              onClick={() => setShowMyProfile(true)}
-              className={`flex flex-col items-center space-y-1 ${showMyProfile ? 'text-pink-500' : 'text-zinc-500 hover:text-zinc-300'}`}
-            >
-              <User className="w-6 h-6" />
-              <span className="text-[10px] font-medium">Perfil</span>
-            </button>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Add padding to bottom of main content on mobile to account for bottom menu */}
       <style dangerouslySetInnerHTML={{__html: `
