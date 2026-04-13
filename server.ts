@@ -209,7 +209,9 @@ async function startServer() {
       const origin = req.headers.origin || process.env.VITE_APP_URL || 'http://localhost:3000';
       
       const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card", "boleto"],
+        automatic_payment_methods: {
+          enabled: true,
+        },
         payment_method_options: {
           boleto: {
             expires_after_days: 3,
