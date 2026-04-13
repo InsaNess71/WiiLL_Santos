@@ -8,9 +8,28 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+console.log("Server __dirname:", __dirname);
+console.log("Current working directory:", process.cwd());
 
 // Load Firebase Config
-const firebaseConfig = JSON.parse(fs.readFileSync(path.join(__dirname, "firebase-applet-config.json"), "utf8"));
+const configPath = path.join(__dirname, "firebase-applet-config.json");
+let firebaseConfig: any;
+
+try {
+  if (fs.existsSync(configPath)) {
+    firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  } else {
+    console.error("CRITICAL: firebase-applet-config.json not found at", configPath);
+    // Fallback to env vars if available, or empty object to prevent crash during build
+    firebaseConfig = {
+      projectId: process.env.VITE_FIREBASE_PROJECT_ID || "fallback-id",
+      firestoreDatabaseId: process.env.VITE_FIREBASE_DATABASE_ID || "(default)"
+    };
+  }
+} catch (err) {
+  console.error("Error loading firebase config:", err);
+  firebaseConfig = {};
+}
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
@@ -290,25 +309,48 @@ async function startServer() {
   });
 
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  const isProd = process.env.NODE_ENV === "production" || fs.existsSync(path.join(process.cwd(), "dist"));
+
+  if (!isProd) {
     console.log("Running in DEVELOPMENT mode with Vite middleware");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+    try {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } catch (err) {
+      console.error("Failed to start Vite middleware, falling back to static:", err);
+      serveStatic(app);
+    }
   } else {
     console.log("Running in PRODUCTION mode serving static files");
-    const distPath = path.join(process.cwd(), "dist");
+    serveStatic(app);
+  }
+
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("Unhandled Server Error:", err);
+    res.status(500).json({ error: "Erro interno do servidor", details: err.message });
+  });
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
+  });
+}
+
+function serveStatic(app: express.Express) {
+  const distPath = path.join(process.cwd(), "dist");
+  if (fs.existsSync(distPath)) {
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
+  } else {
+    console.error("Static dist folder not found at", distPath);
+    app.get("*", (req, res) => {
+      res.status(404).send("Application not built. Please run npm run build.");
+    });
   }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
 }
 
 startServer().catch(err => {
