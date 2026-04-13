@@ -143,8 +143,15 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao enviar mensagem via API');
+        const text = await response.text();
+        let errorMessage = 'Erro ao enviar mensagem via API';
+        try {
+          const errorData = JSON.parse(text);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = `Erro no servidor (${response.status}): ${text.slice(0, 100)}...`;
+        }
+        throw new Error(errorMessage);
       }
       
     } catch (error) {

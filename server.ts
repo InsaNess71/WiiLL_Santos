@@ -19,8 +19,6 @@ if (!admin.apps.length) {
   });
 }
 
-const db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId);
-
 // Lazy Stripe initialization
 let stripeClient: Stripe | null = null;
 function getStripe() {
@@ -37,8 +35,28 @@ function getStripe() {
 }
 
 async function startServer() {
+  console.log("Starting server...");
+  
+  // Initialize Firestore Admin
+  const db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId);
+  console.log("Firestore Admin initialized.");
+
+  if (!process.env.STRIPE_SECRET_KEY) {
+    console.warn("WARNING: STRIPE_SECRET_KEY is not set. Payments will fail.");
+  }
+
   const app = express();
   const PORT = 3000;
+
+  // Middleware
+  app.use(express.json());
+
+  // API routes
+  console.log("Registering API routes...");
+
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
 
   // Stripe Webhook (needs raw body)
   app.post("/api/webhook", express.raw({ type: "application/json" }), async (req, res) => {
@@ -124,10 +142,9 @@ async function startServer() {
     res.json({ received: true });
   });
 
-  app.use(express.json());
-
   // Create Checkout Session
   app.post("/api/create-checkout-session", async (req, res) => {
+    console.log("POST /api/create-checkout-session", req.body);
     const { userId } = req.body;
 
     if (!userId) {
@@ -266,6 +283,12 @@ async function startServer() {
     }
   });
 
+  // 404 handler for API
+  app.use("/api/*", (req, res) => {
+    console.log(`404 at ${req.originalUrl}`);
+    res.status(404).json({ error: `Rota API não encontrada: ${req.originalUrl}` });
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -286,4 +309,7 @@ async function startServer() {
   });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
+});
