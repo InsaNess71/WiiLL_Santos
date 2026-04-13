@@ -1,15 +1,16 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signOut, signInAnonymously, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { initializeFirestore, memoryLocalCache } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getMessaging, isSupported } from 'firebase/messaging';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 
-// Enable offline persistence using the modern API
+// Initialize Firestore with long polling and memory cache to avoid assertion errors and persistence issues
 export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  experimentalForceLongPolling: true,
+  localCache: memoryLocalCache()
 }, firebaseConfig.firestoreDatabaseId);
 
 export const auth = getAuth(app);

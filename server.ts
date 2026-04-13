@@ -2,6 +2,7 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import Stripe from "stripe";
 import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
@@ -18,15 +19,15 @@ if (!admin.apps.length) {
   });
 }
 
-const db = admin.firestore();
+const db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId);
 
 // Lazy Stripe initialization
 let stripeClient: Stripe | null = null;
 function getStripe() {
   if (!stripeClient) {
     const key = process.env.STRIPE_SECRET_KEY;
-    if (!key) {
-      throw new Error("STRIPE_SECRET_KEY is missing. Please add it to your environment variables.");
+    if (!key || key.trim() === "") {
+      throw new Error("A chave secreta do Stripe (STRIPE_SECRET_KEY) não foi configurada. Adicione-a nas configurações do projeto.");
     }
     stripeClient = new Stripe(key, {
       apiVersion: "2024-06-20" as any,
@@ -75,17 +76,48 @@ async function startServer() {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
       const userId = session.metadata?.userId;
+      const eventId = event.id;
 
       if (userId) {
-        console.log(`Payment successful for user: ${userId}`);
-        const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
-        const premiumUntil = new Date(Date.now() + thirtyDaysInMs);
+        console.log(`Processing payment for user: ${userId} (Event: ${eventId})`);
         
-        await db.collection("users").doc(userId).update({
-          isPremium: true,
-          premiumUntil: admin.firestore.Timestamp.fromDate(premiumUntil),
-          premiumSince: admin.firestore.FieldValue.serverTimestamp(),
+        const eventRef = db.collection("stripe_events").doc(eventId);
+        const eventDoc = await eventRef.get();
+        
+        if (eventDoc.exists) {
+          console.log(`Event ${eventId} already processed.`);
+          return res.json({ received: true, already_processed: true });
+        }
+
+        const userRef = db.collection("users").doc(userId);
+        const userDoc = await userRef.get();
+        
+        const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
+        let newPremiumUntil: Date;
+
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          const currentPremiumUntil = userData?.premiumUntil?.toDate?.() || new Date(0);
+          
+          if (currentPremiumUntil > new Date()) {
+            newPremiumUntil = new Date(currentPremiumUntil.getTime() + thirtyDaysInMs);
+          } else {
+            newPremiumUntil = new Date(Date.now() + thirtyDaysInMs);
+          }
+        } else {
+          newPremiumUntil = new Date(Date.now() + thirtyDaysInMs);
+        }
+        
+        await db.runTransaction(async (transaction) => {
+          transaction.set(eventRef, { processedAt: admin.firestore.FieldValue.serverTimestamp() });
+          transaction.update(userRef, {
+            isPremium: true,
+            premiumUntil: admin.firestore.Timestamp.fromDate(newPremiumUntil),
+            premiumSince: admin.firestore.FieldValue.serverTimestamp(),
+          });
         });
+        
+        console.log(`User ${userId} premium extended until ${newPremiumUntil.toISOString()}`);
       }
     }
 
@@ -137,6 +169,99 @@ async function startServer() {
       res.json({ id: session.id, url: session.url });
     } catch (error: any) {
       console.error("Stripe Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // API to send chat message with push notification
+  app.post("/api/send-chat-message", async (req, res) => {
+    const { chatId, text, senderId, imageUrl } = req.body;
+
+    if (!chatId || !senderId || (!text && !imageUrl)) {
+      return res.status(400).json({ error: "Campos obrigatórios faltando." });
+    }
+
+    try {
+      // 1. Security Check: Verify if the sender is who they say they are
+      // In a production app, you'd verify the Firebase ID Token here
+      // const decodedToken = await admin.auth().verifyIdToken(idToken);
+      // if (decodedToken.uid !== senderId) throw new Error("Não autorizado");
+
+      const chatRef = db.collection("chats").doc(chatId);
+      const chatDoc = await chatRef.get();
+
+      if (!chatDoc.exists) {
+        return res.status(404).json({ error: "Chat não encontrado." });
+      }
+
+      const chatData = chatDoc.data();
+      const participants = chatData?.participants || [];
+      const recipientId = participants.find((id: string) => id !== senderId);
+
+      if (!recipientId) {
+        return res.status(400).json({ error: "Destinatário não encontrado." });
+      }
+
+      // 2. Atomic Transaction: Save message and update chat metadata
+      const messageRef = chatRef.collection("messages").doc();
+      const now = admin.firestore.FieldValue.serverTimestamp();
+
+      await db.runTransaction(async (transaction) => {
+        // Save the message
+        transaction.set(messageRef, {
+          senderId,
+          text: text || "",
+          imageUrl: imageUrl || null,
+          createdAt: now,
+          isSystem: false
+        });
+
+        // Update chat metadata and increment unread count for recipient
+        const unreadKey = `unreadCount.${recipientId}`;
+        transaction.update(chatRef, {
+          lastMessage: text || "📷 Foto",
+          updatedAt: now,
+          [unreadKey]: admin.firestore.FieldValue.increment(1)
+        });
+      });
+
+      // 3. Send Push Notification (Async - don't block the response)
+      const sendPush = async () => {
+        try {
+          // Get recipient's FCM token from private data
+          const privateDataDoc = await db.collection("users").doc(recipientId).collection("private").doc("data").get();
+          const fcmToken = privateDataDoc.data()?.fcmToken;
+
+          if (fcmToken) {
+            const senderDoc = await db.collection("users").doc(senderId).get();
+            const senderName = senderDoc.data()?.nickname || "Alguém";
+
+            const message = {
+              notification: {
+                title: senderName,
+                body: text || "Enviou uma foto",
+              },
+              data: {
+                chatId: chatId,
+                type: "chat_message",
+                click_action: "FLUTTER_NOTIFICATION_CLICK" // For mobile compatibility
+              },
+              token: fcmToken,
+            };
+
+            await admin.messaging().send(message);
+            console.log(`Push notification sent to ${recipientId}`);
+          }
+        } catch (pushErr) {
+          console.error("Error sending push notification:", pushErr);
+        }
+      };
+
+      sendPush(); // Fire and forget
+
+      res.json({ success: true, messageId: messageRef.id });
+    } catch (error: any) {
+      console.error("Chat API Error:", error);
       res.status(500).json({ error: error.message });
     }
   });

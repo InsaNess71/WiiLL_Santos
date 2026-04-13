@@ -41,6 +41,7 @@ export interface UserProfile {
   isShadowBanned?: boolean;
   isPremium?: boolean;
   premiumUntil?: Timestamp | any;
+  isAnonymous?: boolean;
   karma?: number;
 }
 

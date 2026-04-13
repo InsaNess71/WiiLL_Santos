@@ -10,6 +10,9 @@ import SplashScreen from './components/SplashScreen';
 import { Ghost, PenSquare, Flame, Clock, Filter, LogIn, MessageSquare, LogOut, User, Search, X, Trophy, Home, Bell, ShieldAlert, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { isPremiumActive } from './lib/userCache';
+import { playNotificationSound } from './lib/audio';
+
+type SortOption = 'recent' | 'popular' | 'top_week';
 
 // Lazy loaded components
 const CreateConfession = lazy(() => import('./components/CreateConfession'));
@@ -22,58 +25,6 @@ const TermsOfUse = lazy(() => import('./components/TermsOfUse'));
 const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
 const Onboarding = lazy(() => import('./components/Onboarding'));
 const RatingModal = lazy(() => import('./components/RatingModal'));
-
-type SortOption = 'recent' | 'popular' | 'top_week';
-
-let audioCtx: AudioContext | null = null;
-
-const initAudio = () => {
-  try {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
-    }
-  } catch (e) {
-    console.error("Audio init failed", e);
-  }
-};
-
-if (typeof document !== 'undefined') {
-  const init = () => {
-    initAudio();
-    document.removeEventListener('pointerdown', init);
-    document.removeEventListener('keydown', init);
-  };
-  document.addEventListener('pointerdown', init);
-  document.addEventListener('keydown', init);
-}
-
-const playNotificationSound = () => {
-  try {
-    initAudio();
-    if (!audioCtx) return;
-    
-    const playBeep = (freq: number, time: number, duration: number) => {
-      if (!audioCtx) return;
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, time);
-      gain.gain.setValueAtTime(0.1, time);
-      gain.gain.exponentialRampToValueAtTime(0.00001, time + duration);
-      osc.start(time);
-      osc.stop(time + duration);
-    };
-    playBeep(880, audioCtx.currentTime, 0.1);
-    playBeep(1108, audioCtx.currentTime + 0.1, 0.2);
-  } catch (e) {
-    console.error("Audio playback failed", e);
-  }
-};
 
 export default function App() {
   const [confessions, setConfessions] = useState<Confession[]>([]);
@@ -218,8 +169,15 @@ export default function App() {
       setActiveChatId(e.detail.chatId);
       setShowChats(true);
     };
+    const handleRequestSignIn = () => {
+      signInWithGoogle();
+    };
     window.addEventListener('openChat', handleOpenChat);
-    return () => window.removeEventListener('openChat', handleOpenChat);
+    window.addEventListener('requestGoogleSignIn', handleRequestSignIn);
+    return () => {
+      window.removeEventListener('openChat', handleOpenChat);
+      window.removeEventListener('requestGoogleSignIn', handleRequestSignIn);
+    };
   }, []);
 
   useEffect(() => {
@@ -242,10 +200,11 @@ export default function App() {
         setCurrentUserProfile(userData);
         
         if (user.email === 'wiillsantos16@gmail.com') {
-          if (userData.role !== 'admin' || !userData.isVerified) {
+          if (userData.role !== 'admin' || !userData.isVerified || userData.isAnonymous !== false) {
             updateDoc(doc(db, 'users', user.uid), {
               role: 'admin',
               isVerified: true,
+              isAnonymous: false,
               ...(!userData.avatar ? { avatar: ADMIN_AVATAR } : {})
             });
           }
@@ -314,7 +273,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!user || needsNickname) return;
+    if (!user || needsNickname || !currentUserProfile) return;
 
     const updatePresence = async () => {
       try {
@@ -341,6 +300,8 @@ export default function App() {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (snapshot.metadata.fromCache && totalUnread > 0) return;
+      
       let total = 0;
       let shouldNotify = false;
       let notifyMessage = '';
@@ -457,6 +418,8 @@ export default function App() {
     }
 
     const unsubscribe = onSnapshot(finalQuery, (snapshot) => {
+      if (snapshot.metadata.fromCache && confessions.length > 0) return;
+
       let data = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -581,7 +544,7 @@ export default function App() {
                   <button 
                     onClick={signInAnonymouslyUser}
                     className="flex items-center space-x-1.5 sm:space-x-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-colors border border-zinc-700"
-                    title="Entrar como Visitante"
+                    title="Entrar como Visitante (Recursos Premium bloqueados)"
                   >
                     <Ghost className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     <span className="hidden xs:inline">Visitante</span>

@@ -87,17 +87,18 @@ const CommentItem = memo(function CommentItem({ comment, isBestComment, onReply,
         batch.delete(likeRef);
         batch.update(commentRef, { likes: increment(-1) });
         batch.update(authorRef, { karma: increment(-1) });
-        await batch.commit();
         setIsLiked(false);
+        await batch.commit();
       } else {
         batch.set(likeRef, { createdAt: serverTimestamp() });
         batch.update(commentRef, { likes: increment(1) });
         batch.update(authorRef, { karma: increment(1) });
-        await batch.commit();
         setIsLiked(true);
+        await batch.commit();
       }
     } catch (error) {
       console.error("Error toggling like:", error);
+      setIsLiked(!isLiked); // Revert
     } finally {
       setLikeLoading(false);
     }

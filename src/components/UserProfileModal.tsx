@@ -361,39 +361,56 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
                       <p className="text-xs text-zinc-400">30 dias de acesso a recursos exclusivos.</p>
                     </div>
                   </div>
-                  <button
-                    disabled={isProcessingPayment}
-                    onClick={async () => {
-                      setIsProcessingPayment(true);
-                      setError('');
-                      try {
-                        const response = await fetch('/api/create-checkout-session', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ userId: auth.currentUser?.uid }),
-                        });
-                        const data = await response.json();
-                        if (data.url) {
-                          // Abre em uma nova aba para evitar o bloqueio do iframe
-                          window.open(data.url, '_blank');
-                        } else {
-                          throw new Error(data.error || 'Erro ao criar sessão');
+                  
+                  {auth.currentUser?.isAnonymous ? (
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-center">
+                      <p className="text-xs text-zinc-400 mb-2">Visitantes não podem assinar o Premium. Entre com uma conta Google para salvar seu progresso e assinar.</p>
+                      <button
+                        onClick={() => {
+                          onClose();
+                          // Dispatch event or call sign in
+                          window.dispatchEvent(new CustomEvent('requestGoogleSignIn'));
+                        }}
+                        className="text-xs font-bold text-pink-500 hover:text-pink-400 underline"
+                      >
+                        Entrar com Google agora
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      disabled={isProcessingPayment}
+                      onClick={async () => {
+                        setIsProcessingPayment(true);
+                        setError('');
+                        try {
+                          const response = await fetch('/api/create-checkout-session', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userId: auth.currentUser?.uid }),
+                          });
+                          const data = await response.json();
+                          if (data.url) {
+                            // Abre em uma nova aba para evitar o bloqueio do iframe
+                            window.open(data.url, '_blank');
+                          } else {
+                            throw new Error(data.error || 'Erro ao criar sessão');
+                          }
+                        } catch (err: any) {
+                          console.error(err);
+                          setError(err.message || 'Erro ao iniciar pagamento. Verifique suas chaves do Stripe.');
+                        } finally {
+                          setIsProcessingPayment(false);
                         }
-                      } catch (err: any) {
-                        console.error(err);
-                        setError('Erro ao iniciar pagamento. Verifique suas chaves do Stripe.');
-                      } finally {
-                        setIsProcessingPayment(false);
-                      }
-                    }}
-                    className="w-full py-2.5 bg-yellow-500 hover:bg-yellow-400 text-zinc-900 font-bold rounded-xl transition-colors shadow-lg shadow-yellow-500/10 disabled:opacity-50 flex items-center justify-center space-x-2"
-                  >
-                    {isProcessingPayment ? (
-                      <div className="w-5 h-5 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <span>Assinar Premium - R$ 14,99 / mês</span>
-                    )}
-                  </button>
+                      }}
+                      className="w-full py-2.5 bg-yellow-500 hover:bg-yellow-400 text-zinc-900 font-bold rounded-xl transition-colors shadow-lg shadow-yellow-500/10 disabled:opacity-50 flex items-center justify-center space-x-2"
+                    >
+                      {isProcessingPayment ? (
+                        <div className="w-5 h-5 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <span>Assinar Premium - R$ 14,99 / mês</span>
+                      )}
+                    </button>
+                  )}
                 </div>
               )}
 

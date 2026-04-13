@@ -14,6 +14,12 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
 
   const handleSubscribe = async () => {
     if (!auth.currentUser) return;
+    
+    if (auth.currentUser.isAnonymous) {
+      alert("Visitantes não podem assinar o Premium. Por favor, entre com uma conta Google para salvar seu progresso e assinar.");
+      return;
+    }
+
     setIsProcessing(true);
     
     try {
@@ -30,14 +36,15 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
       const data = await response.json();
 
       if (data.url) {
-        // Redirect to Stripe Checkout
-        window.location.href = data.url;
+        // Redirect to Stripe Checkout in a new tab
+        window.open(data.url, '_blank');
+        onClose();
       } else {
         throw new Error(data.error || 'Erro ao criar sessão de pagamento');
       }
     } catch (error: any) {
       console.error("Payment Error:", error);
-      alert("Erro ao iniciar pagamento: " + error.message);
+      alert(error.message || "Erro ao iniciar pagamento. Verifique suas chaves do Stripe.");
     } finally {
       setIsProcessing(false);
     }
@@ -133,10 +140,10 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
                   disabled={isProcessing}
                   className="w-full py-5 bg-white text-zinc-950 rounded-2xl font-black text-lg hover:bg-zinc-100 transition-all shadow-xl shadow-white/5 active:scale-[0.98] disabled:opacity-50"
                 >
-                  {isProcessing ? 'Processando...' : 'Assinar por R$ 29,90 (Único)'}
+                  {isProcessing ? 'Processando...' : 'Assinar por R$ 14,99 / mês'}
                 </button>
                 <p className="text-[10px] text-center text-zinc-600 px-8">
-                  Ao assinar, você concorda com nossos Termos de Uso. O acesso Premium é vitalício e não requer assinaturas mensais.
+                  Ao assinar, você concorda com nossos Termos de Uso. O acesso Premium é válido por 30 dias e pode ser renovado.
                 </p>
               </div>
             </>

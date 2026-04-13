@@ -104,16 +104,17 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
       if (isLiked) {
         batch.delete(likeRef);
         batch.update(confessionRef, { likes: increment(-1) });
-        await batch.commit();
         setIsLiked(false);
-      } else {
-        batch.set(likeRef, { createdAt: new Date() });
-        batch.update(confessionRef, { likes: increment(1) });
         await batch.commit();
+      } else {
+        batch.set(likeRef, { createdAt: serverTimestamp() });
+        batch.update(confessionRef, { likes: increment(1) });
         setIsLiked(true);
+        await batch.commit();
       }
     } catch (error) {
       console.error("Error toggling like:", error);
+      setIsLiked(!isLiked); // Revert on error
     } finally {
       setLikeLoading(false);
     }
@@ -148,6 +149,7 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
       setUserJudgement(vote);
     } catch (error) {
       console.error("Error voting:", error);
+      setUserJudgement(userJudgement); // Revert or handle error
     } finally {
       setJudgementLoading(false);
     }

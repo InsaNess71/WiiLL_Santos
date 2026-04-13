@@ -39,7 +39,8 @@ export default function NicknameModal({ onComplete }: NicknameModalProps) {
       const userData: any = {
         nickname: trimmed,
         createdAt: serverTimestamp(),
-        lastActive: serverTimestamp()
+        lastActive: serverTimestamp(),
+        isAnonymous: auth.currentUser.isAnonymous
       };
 
       if (isAdmin) {

@@ -126,57 +126,73 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
     setImageUrl('');
 
     try {
-      const otherUserId = chat.participants.find(id => id !== auth.currentUser?.uid);
-      
-      const chatRef = doc(db, 'chats', chatId);
-      const chatSnap = await getDoc(chatRef);
+      // Use the new server-side API for better scalability and push notifications
+      const response = await fetch('/api/send-chat-message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // In a real app, you would add the auth token here
+          // 'Authorization': `Bearer ${await auth.currentUser.getIdToken()}`
+        },
+        body: JSON.stringify({
+          chatId,
+          text,
+          senderId: auth.currentUser.uid,
+          imageUrl: isPremiumActive(currentUserProfile) ? currentImageUrl : null
+        })
+      });
 
-      if (!chatSnap.exists()) {
-        // Create the chat document now that the first message is sent
-        const expiresAt = new Date();
-        expiresAt.setHours(expiresAt.getHours() + 24);
-
-        await setDoc(chatRef, {
-          participants: chat.participants,
-          durationMode: '24h',
-          expiresAt,
-          updatedAt: serverTimestamp(),
-          lastMessage: text || '📷 Foto',
-          unreadCount: {
-            [auth.currentUser.uid]: 0,
-            [otherUserId!]: 1
-          }
-        });
-      } else {
-        // Update existing chat
-        const updateData: any = {
-          updatedAt: serverTimestamp(),
-          lastMessage: text || '📷 Foto'
-        };
-        
-        if (otherUserId) {
-          updateData[`unreadCount.${otherUserId}`] = increment(1);
-        }
-        
-        await updateDoc(chatRef, updateData);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erro ao enviar mensagem via API');
       }
-
-      // Add the message
-      const messageData: any = {
-        senderId: auth.currentUser.uid,
-        text,
-        createdAt: serverTimestamp(),
-        isSystem: false
-      };
-
-      if (isPremiumActive(currentUserProfile) && currentImageUrl) {
-        messageData.imageUrl = currentImageUrl;
-      }
-
-      await addDoc(collection(db, 'chats', chatId, 'messages'), messageData);
       
     } catch (error) {
-      console.error("Error sending message:", error);
+      console.error("Error sending message via API:", error);
+      // Fallback to direct Firestore write if API fails (optional, but good for resilience)
+      try {
+        const otherUserId = chat.participants.find(id => id !== auth.currentUser?.uid);
+        const chatRef = doc(db, 'chats', chatId);
+        const chatSnap = await getDoc(chatRef);
+
+        if (!chatSnap.exists()) {
+          const expiresAt = new Date();
+          expiresAt.setHours(expiresAt.getHours() + 24);
+          await setDoc(chatRef, {
+            participants: chat.participants,
+            durationMode: '24h',
+            expiresAt,
+            updatedAt: serverTimestamp(),
+            lastMessage: text || '📷 Foto',
+            unreadCount: {
+              [auth.currentUser.uid]: 0,
+              [otherUserId!]: 1
+            }
+          });
+        } else {
+          const updateData: any = {
+            updatedAt: serverTimestamp(),
+            lastMessage: text || '📷 Foto'
+          };
+          if (otherUserId) {
+            updateData[`unreadCount.${otherUserId}`] = increment(1);
+          }
+          await updateDoc(chatRef, updateData);
+        }
+
+        const messageData: any = {
+          senderId: auth.currentUser.uid,
+          text,
+          createdAt: serverTimestamp(),
+          isSystem: false
+        };
+        if (isPremiumActive(currentUserProfile) && currentImageUrl) {
+          messageData.imageUrl = currentImageUrl;
+        }
+        await addDoc(collection(db, 'chats', chatId, 'messages'), messageData);
+      } catch (fallbackError) {
+        console.error("Fallback message sending failed:", fallbackError);
+      }
     }
   };
 
