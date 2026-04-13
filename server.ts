@@ -309,7 +309,9 @@ async function startServer() {
   });
 
   // Vite middleware for development
-  const isProd = process.env.NODE_ENV === "production" || fs.existsSync(path.join(process.cwd(), "dist"));
+  const isProd = process.env.NODE_ENV === "production";
+  console.log(`Server mode: ${isProd ? "PRODUCTION" : "DEVELOPMENT"}`);
+  console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
 
   if (!isProd) {
     console.log("Running in DEVELOPMENT mode with Vite middleware");
@@ -334,19 +336,27 @@ async function startServer() {
   });
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+    console.log(`Server is listening on 0.0.0.0:${PORT}`);
+    console.log(`Health check available at http://0.0.0.0:${PORT}/api/health`);
   });
+
+  // Keep-alive log
+  setInterval(() => {
+    console.log(`Server heartbeat - ${new Date().toISOString()} - Mode: ${process.env.NODE_ENV}`);
+  }, 60000);
 }
 
 function serveStatic(app: express.Express) {
-  const distPath = path.join(process.cwd(), "dist");
+  const distPath = path.resolve(__dirname, "dist");
   if (fs.existsSync(distPath)) {
+    console.log(`Serving static files from: ${distPath}`);
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      res.sendFile(path.resolve(distPath, "index.html"));
     });
   } else {
     console.error("Static dist folder not found at", distPath);
+    console.log("Current directory contents:", fs.readdirSync(__dirname));
     app.get("*", (req, res) => {
       res.status(404).send("Application not built. Please run npm run build.");
     });
