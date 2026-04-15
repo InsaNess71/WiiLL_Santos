@@ -24,7 +24,7 @@ function getStripe() {
   if (!stripeClient) {
     const key = process.env.STRIPE_SECRET_KEY;
     if (!key || key.trim() === "") {
-      throw new Error("A chave secreta do Stripe (STRIPE_SECRET_KEY) não foi configurada.");
+      throw new Error("STRIPE_SECRET_KEY não configurada.");
     }
     stripeClient = new Stripe(key, {
       apiVersion: "2024-06-20" as any,
@@ -34,11 +34,22 @@ function getStripe() {
 }
 
 async function startServer() {
-  console.log("Starting server initialization...");
+  console.log("SERVER_START: Initializing...");
   const app = express();
   const PORT = 3000;
 
-  // 1. Middleware for Stripe Webhook (MUST be before express.json())
+  // 1. Logging
+  app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+  });
+
+  // 2. Health Check
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  // 3. Stripe Webhook (Raw Body) - MUST be before express.json()
   app.post("/api/webhook", express.raw({ type: "application/json" }), async (req, res) => {
     const sig = req.headers["stripe-signature"] as string;
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -66,17 +77,15 @@ async function startServer() {
       }
     }
 
-    // Handle the event
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
       const userId = session.metadata?.userId;
       const eventId = event.id;
 
       if (userId) {
-        console.log(`Processing payment for user: ${userId}`);
-        // Note: db is initialized later, so we need to ensure it's available.
-        // We'll use a local db reference here.
-        const configPath = path.join(__dirname, "firebase-applet-config.json");
+        const configPath = fs.existsSync(path.join(__dirname, "firebase-applet-config.json"))
+          ? path.join(__dirname, "firebase-applet-config.json")
+          : path.join(__dirname, "..", "firebase-applet-config.json");
         const firebaseConfig = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf8")) : {};
         if (!admin.apps.length) admin.initializeApp({ projectId: firebaseConfig.projectId });
         const db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId);
@@ -109,34 +118,21 @@ async function startServer() {
     res.json({ received: true });
   });
 
-  // 2. General Middleware
+  // 4. JSON Middleware
   app.use(express.json());
-  app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-    next();
-  });
 
-  // 3. Load Firebase & Initialize
-  let configPath = path.join(__dirname, "firebase-applet-config.json");
-  if (!fs.existsSync(configPath)) {
-    configPath = path.join(__dirname, "..", "firebase-applet-config.json");
-  }
+  // 5. Firebase Init
+  const configPath = fs.existsSync(path.join(__dirname, "firebase-applet-config.json"))
+    ? path.join(__dirname, "firebase-applet-config.json")
+    : path.join(__dirname, "..", "firebase-applet-config.json");
   
-  let firebaseConfig: any = {};
-  if (fs.existsSync(configPath)) {
-    firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
-  }
-
+  const firebaseConfig = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf8")) : {};
   if (!admin.apps.length) {
-    admin.initializeApp({ projectId: firebaseConfig.projectId });
+    admin.initializeApp({ projectId: firebaseConfig.projectId || process.env.VITE_FIREBASE_PROJECT_ID });
   }
   const db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId);
 
-  // 4. API Routes
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
-  });
-
+  // 6. API Routes
   app.post("/api/create-checkout-session", async (req, res) => {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: "User ID is required" });
@@ -162,6 +158,7 @@ async function startServer() {
       });
       res.json({ id: session.id, url: session.url });
     } catch (error: any) {
+      console.error("Stripe Error:", error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -212,25 +209,26 @@ async function startServer() {
 
       res.json({ success: true, messageId: messageRef.id });
     } catch (error: any) {
+      console.error("Chat API Error:", error);
       res.status(500).json({ error: error.message });
     }
   });
 
-  // 5. Static Files & SPA Fallback
-  const isProd = process.env.NODE_ENV === "production";
-  if (isProd) {
-    let distPath = path.resolve(__dirname, "dist");
-    if (!fs.existsSync(distPath)) distPath = path.resolve(__dirname, "..", "dist");
+  // 7. Static Files & SPA Fallback
+  let distPath = path.resolve(__dirname, "dist");
+  if (!fs.existsSync(distPath)) distPath = path.resolve(__dirname, "..", "dist");
 
-    if (fs.existsSync(distPath)) {
-      app.use(express.static(distPath));
-      app.get("*", (req, res) => {
-        if (req.url.startsWith("/api/")) return res.status(404).json({ error: "API route not found" });
-        res.sendFile(path.resolve(distPath, "index.html"));
-      });
-    }
+  const isProd = process.env.NODE_ENV === "production" || fs.existsSync(distPath);
+
+  if (isProd && fs.existsSync(distPath)) {
+    console.log(`SERVER_START: Serving static files from ${distPath}`);
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      if (req.url.startsWith("/api/")) return res.status(404).json({ error: "API route not found" });
+      res.sendFile(path.resolve(distPath, "index.html"));
+    });
   } else {
-    // Dynamic import for Vite to avoid production issues
+    console.log("SERVER_START: Running in development mode with Vite...");
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -239,14 +237,14 @@ async function startServer() {
     app.use(vite.middlewares);
   }
 
-  // 6. Global 404 for API
+  // 8. Final API 404 handler
   app.all("/api/*", (req, res) => {
     res.status(404).json({ error: `Rota API não encontrada: ${req.originalUrl}` });
   });
 
-  // 7. Start Listening
+  // 9. Start Listening
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+    console.log(`SERVER_READY: Running on http://0.0.0.0:${PORT}`);
   });
 }
 

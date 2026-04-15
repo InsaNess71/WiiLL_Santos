@@ -33,6 +33,18 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
         }),
       });
 
+      if (!response.ok) {
+        const text = await response.text();
+        console.error("Server error response:", text);
+        let errorMessage = `Erro no servidor (${response.status})`;
+        if (text.includes('NOT_FOUND') || text.includes('could not be found')) {
+          errorMessage = 'Servidor não encontrado (404). Verifique se a rota da API está correta.';
+        } else {
+          errorMessage += `: ${text.slice(0, 50)}...`;
+        }
+        throw new Error(errorMessage);
+      }
+
       const data = await response.json();
 
       if (data.url) {

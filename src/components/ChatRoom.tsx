@@ -149,7 +149,11 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
           const errorData = JSON.parse(text);
           errorMessage = errorData.error || errorMessage;
         } catch (e) {
-          errorMessage = `Erro no servidor (${response.status}): ${text.slice(0, 100)}...`;
+          if (text.includes('NOT_FOUND') || text.includes('could not be found')) {
+            errorMessage = 'Servidor não encontrado (404). Verifique se a rota da API está correta.';
+          } else {
+            errorMessage = `Erro no servidor (${response.status}): ${text.slice(0, 50)}...`;
+          }
         }
         throw new Error(errorMessage);
       }
