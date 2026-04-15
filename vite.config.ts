@@ -69,6 +69,15 @@ export default defineConfig(({mode}) => {
               icons: [{ src: '/icon-192.png', sizes: '192x192' }]
             }
           ]
+        },
+        workbox: {
+          navigateFallbackDenylist: [/^\/api/],
+          runtimeCaching: [
+            {
+              urlPattern: /^\/api\/.*$/,
+              handler: 'NetworkOnly',
+            }
+          ]
         }
       })
     ],

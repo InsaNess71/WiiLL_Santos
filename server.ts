@@ -112,7 +112,9 @@ async function startServer() {
   app.use(express.json());
 
   // 4. API Routes (Defined directly on app for maximum reliability)
-  app.get("/api/health", (req, res) => {
+  const apiRouter = express.Router();
+
+  apiRouter.get("/health", (req, res) => {
     res.json({ 
       status: "ok", 
       timestamp: new Date().toISOString(), 
@@ -125,7 +127,7 @@ async function startServer() {
     });
   });
 
-  app.post("/api/create-checkout-session", async (req, res) => {
+  apiRouter.post("/create-checkout-session", async (req, res) => {
     console.log("API_CALL: create-checkout-session - START");
     const { userId } = req.body;
     
@@ -171,7 +173,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/send-chat-message", async (req, res) => {
+  apiRouter.post("/send-chat-message", async (req, res) => {
     console.log("API_CALL: send-chat-message - START");
     const { chatId, text, senderId, imageUrl } = req.body;
     if (!chatId || !senderId || (!text && !imageUrl)) {
@@ -215,6 +217,14 @@ async function startServer() {
       res.status(500).json({ error: error.message });
     }
   });
+
+  // Catch-all for undefined API routes
+  apiRouter.all("*", (req, res) => {
+    console.warn(`API_CALL: Route not found - ${req.method} ${req.url}`);
+    res.status(404).json({ error: "API Route not found", method: req.method, path: req.url });
+  });
+
+  app.use("/api", apiRouter);
 
   // 5. Static Files & SPA Fallback
   const rootDir = process.cwd();
