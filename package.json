@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "start": "NODE_ENV=production node dist-server/server.js",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=esm --outfile=dist-server/server.js --external:express --external:vite --external:stripe --external:firebase-admin --external:path --external:fs --external:url",
+    "start": "NODE_ENV=production tsx server.ts",
+    "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"

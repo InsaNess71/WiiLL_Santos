@@ -1,13 +1,3 @@
-console.log("SERVER_START_SEQUENCE: Script loaded");
-
-process.on("uncaughtException", (err) => {
-  console.error("SERVER_CRITICAL: Uncaught Exception:", err);
-});
-
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("SERVER_CRITICAL: Unhandled Rejection at:", promise, "reason:", reason);
-});
-
 import express from "express";
 import Stripe from "stripe";
 import admin from "firebase-admin";
@@ -38,66 +28,37 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // 0. Bind port IMMEDIATELY to avoid 404s from proxy during startup
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`SERVER_READY: Listening on 0.0.0.0:${PORT}`);
-  });
-
-  // 1. Logging
+  // 1. Logging Middleware
   app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
     next();
   });
 
-  // 2. Health Check
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
-  });
-
-  // 3. Stripe Webhook (Raw Body) - MUST be before express.json()
+  // 2. Stripe Webhook (Raw Body) - MUST be before express.json()
   app.post("/api/webhook", express.raw({ type: "application/json" }), async (req, res) => {
     const sig = req.headers["stripe-signature"] as string;
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-    const sharedWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET_SHARED;
     
     if (!webhookSecret) {
       console.error("STRIPE_WEBHOOK_SECRET is missing");
       return res.status(500).json({ error: "Webhook secret missing" });
     }
 
-    let event;
-    const stripe = getStripe();
-
     try {
-      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-    } catch (err: any) {
-      if (sharedWebhookSecret) {
-        try {
-          event = stripe.webhooks.constructEvent(req.body, sig, sharedWebhookSecret);
-        } catch (secondErr: any) {
-          return res.status(400).json({ error: `Webhook Error: ${secondErr.message}` });
-        }
-      } else {
-        return res.status(400).json({ error: `Webhook Error: ${err.message}` });
-      }
-    }
+      const stripe = getStripe();
+      const event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
 
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const userId = session.metadata?.userId;
-      const eventId = event.id;
+      if (event.type === "checkout.session.completed") {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const userId = session.metadata?.userId;
+        if (userId) {
+          const configPath = fs.existsSync(path.join(__dirname, "firebase-applet-config.json"))
+            ? path.join(__dirname, "firebase-applet-config.json")
+            : path.join(__dirname, "..", "firebase-applet-config.json");
+          const firebaseConfig = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf8")) : {};
+          if (!admin.apps.length) admin.initializeApp({ projectId: firebaseConfig.projectId });
+          const db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId);
 
-      if (userId) {
-        const configPath = fs.existsSync(path.join(__dirname, "firebase-applet-config.json"))
-          ? path.join(__dirname, "firebase-applet-config.json")
-          : path.join(__dirname, "..", "firebase-applet-config.json");
-        const firebaseConfig = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf8")) : {};
-        if (!admin.apps.length) admin.initializeApp({ projectId: firebaseConfig.projectId });
-        const db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId);
-
-        const eventRef = db.collection("stripe_events").doc(eventId);
-        const eventDoc = await eventRef.get();
-        if (!eventDoc.exists) {
           const userRef = db.collection("users").doc(userId);
           const userDoc = await userRef.get();
           const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
@@ -109,35 +70,39 @@ async function startServer() {
           } else {
             newPremiumUntil = new Date(Date.now() + thirtyDaysInMs);
           }
-          await db.runTransaction(async (transaction) => {
-            transaction.set(eventRef, { processedAt: admin.firestore.FieldValue.serverTimestamp() });
-            transaction.update(userRef, {
-              isPremium: true,
-              premiumUntil: admin.firestore.Timestamp.fromDate(newPremiumUntil),
-              premiumSince: admin.firestore.FieldValue.serverTimestamp(),
-            });
+          await userRef.update({
+            isPremium: true,
+            premiumUntil: admin.firestore.Timestamp.fromDate(newPremiumUntil),
+            premiumSince: admin.firestore.FieldValue.serverTimestamp(),
           });
         }
       }
+      res.json({ received: true });
+    } catch (err: any) {
+      console.error("Webhook Error:", err.message);
+      res.status(400).json({ error: `Webhook Error: ${err.message}` });
     }
-    res.json({ received: true });
   });
 
-  // 4. JSON Middleware
+  // 3. General Middlewares
   app.use(express.json());
 
-  // 5. Firebase Init
+  // 4. Firebase Initialization
   const configPath = fs.existsSync(path.join(__dirname, "firebase-applet-config.json"))
     ? path.join(__dirname, "firebase-applet-config.json")
     : path.join(__dirname, "..", "firebase-applet-config.json");
   
   const firebaseConfig = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf8")) : {};
   if (!admin.apps.length) {
-    admin.initializeApp({ projectId: firebaseConfig.projectId || process.env.VITE_FIREBASE_PROJECT_ID });
+    admin.initializeApp({ projectId: firebaseConfig.projectId });
   }
   const db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId);
 
-  // 6. API Routes
+  // 5. API Routes
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   app.post("/api/create-checkout-session", async (req, res) => {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: "User ID is required" });
@@ -219,7 +184,7 @@ async function startServer() {
     }
   });
 
-  // 7. Static Files & SPA Fallback
+  // 6. Static Files & SPA Fallback
   let distPath = path.resolve(__dirname, "dist");
   if (!fs.existsSync(distPath)) distPath = path.resolve(__dirname, "..", "dist");
   if (!fs.existsSync(distPath)) distPath = path.resolve(process.cwd(), "dist");
@@ -243,9 +208,14 @@ async function startServer() {
     app.use(vite.middlewares);
   }
 
-  // 8. Final API 404 handler
+  // 7. Final API 404 handler
   app.all("/api/*", (req, res) => {
     res.status(404).json({ error: `Rota API não encontrada: ${req.originalUrl}` });
+  });
+
+  // 8. Start Listening
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`SERVER_READY: Running on http://0.0.0.0:${PORT}`);
   });
 }
 
