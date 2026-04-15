@@ -382,12 +382,14 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
                       onClick={async () => {
                         setIsProcessingPayment(true);
                         setError('');
+                        console.log("Iniciando checkout session...");
                         try {
                           const response = await fetch('/api/create-checkout-session', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ userId: auth.currentUser?.uid }),
                           });
+                          console.log(`Resposta Checkout: ${response.status}`);
                           
                           if (!response.ok) {
                             const text = await response.text();

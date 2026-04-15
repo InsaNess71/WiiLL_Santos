@@ -127,12 +127,11 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
 
     try {
       // Use the new server-side API for better scalability and push notifications
+      console.log(`Enviando mensagem para /api/send-chat-message...`);
       const response = await fetch('/api/send-chat-message', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // In a real app, you would add the auth token here
-          // 'Authorization': `Bearer ${await auth.currentUser.getIdToken()}`
         },
         body: JSON.stringify({
           chatId,
@@ -141,6 +140,8 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
           imageUrl: isPremiumActive(currentUserProfile) ? currentImageUrl : null
         })
       });
+
+      console.log(`Resposta da API: ${response.status} ${response.statusText}`);
 
       if (!response.ok) {
         const text = await response.text();

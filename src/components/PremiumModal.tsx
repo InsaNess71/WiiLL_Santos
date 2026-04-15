@@ -22,6 +22,7 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
 
     setIsProcessing(true);
     
+    console.log("Iniciando checkout session...");
     try {
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
@@ -32,6 +33,7 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
           userId: auth.currentUser.uid,
         }),
       });
+      console.log(`Resposta Checkout: ${response.status}`);
 
       if (!response.ok) {
         const text = await response.text();
