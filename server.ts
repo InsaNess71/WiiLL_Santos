@@ -256,33 +256,28 @@ async function startServer() {
 
   if (distExists) {
     console.log(`SERVER: Serving static files from ${distPath}`);
-    // Use absolute path for express.static
+    
+    // Serve static files first
     app.use(express.static(distPath, {
-      maxAge: '1d',
-      etag: true
+      maxAge: '1h', // Lowered for testing
+      etag: true,
+      index: false // We handle index manually below
     }));
     
+    // Catch-all for SPA
     app.get("*", (req, res) => {
-      // 1. Ignore API routes
+      // 1. API routes must return 404 JSON if not handled
       if (req.url.startsWith("/api/")) {
         return res.status(404).json({ error: `API route not found: ${req.url}` });
       }
       
-      // 2. Ignore missing assets (don't serve index.html for .js, .css, etc.)
-      const isAsset = /\.(js|css|png|jpg|jpeg|gif|svg|ico|json|webmanifest)$/.test(req.url.split('?')[0]);
-      if (isAsset) {
-        console.warn(`SERVER: Asset not found: ${req.url}`);
-        return res.status(404).send("Asset not found");
-      }
-
-      // 3. Serve index.html for SPA routes
+      // 2. For everything else, try to serve index.html
+      // This is the heart of SPA routing
       if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
+        return res.sendFile(indexPath);
       } else {
-        // This should theoretically not happen if distExists was true, 
-        // but we handle it just in case of disk changes
-        console.error(`SERVER ERROR: index.html disappeared from ${indexPath}`);
-        res.status(500).send("Application error: index.html missing.");
+        console.error(`SERVER ERROR: index.html not found at ${indexPath}`);
+        return res.status(404).send("Página não encontrada. Por favor, recarregue o site.");
       }
     });
   } else {
