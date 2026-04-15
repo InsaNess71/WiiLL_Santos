@@ -203,20 +203,40 @@ async function startServer() {
   });
 
   // 7. Static Files & SPA Fallback
-  let distPath = path.resolve(__dirname, "dist");
-  if (!fs.existsSync(distPath)) distPath = path.resolve(__dirname, "..", "dist");
-  if (!fs.existsSync(distPath)) distPath = path.resolve(process.cwd(), "dist");
+  const rootPath = process.cwd();
+  let distPath = path.resolve(rootPath, "dist");
+  
+  // Fallback for different structures
+  if (!fs.existsSync(distPath)) {
+    distPath = path.resolve(__dirname, "dist");
+  }
+  if (!fs.existsSync(distPath)) {
+    distPath = path.resolve(__dirname, "..", "dist");
+  }
 
-  const isProd = process.env.NODE_ENV === "production" || fs.existsSync(distPath);
+  const isProd = process.env.NODE_ENV === "production" || fs.existsSync(path.join(distPath, "index.html"));
 
   if (isProd && fs.existsSync(distPath)) {
+    const indexPath = path.resolve(distPath, "index.html");
     console.log(`SERVER_STATIC: Serving from ${distPath}`);
+    console.log(`SERVER_STATIC: Index path: ${indexPath} (Exists: ${fs.existsSync(indexPath)})`);
+    
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       if (req.url.startsWith("/api/")) {
         return res.status(404).json({ error: `API route not found: ${req.url}` });
       }
-      res.sendFile(path.resolve(distPath, "index.html"));
+      
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).json({ 
+          error: "Frontend not found", 
+          details: `Expected index.html at ${indexPath}`,
+          cwd: process.cwd(),
+          dirname: __dirname
+        });
+      }
     });
   } else {
     console.log("SERVER_DEV: Running with Vite middleware...");
