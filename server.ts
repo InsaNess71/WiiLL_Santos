@@ -218,31 +218,44 @@ async function startServer() {
 
   // 5. Static Files & SPA Fallback
   const rootDir = process.cwd();
-  const distPath = path.join(rootDir, "dist");
-  const indexPath = path.join(distPath, "index.html");
+  
+  // Try multiple locations for dist folder
+  const possibleDistPaths = [
+    path.join(rootDir, "dist"),
+    path.resolve(__dirname, "dist"),
+    path.resolve(__dirname, "..", "dist"),
+    "/app/applet/dist"
+  ];
 
-  console.log(`SERVER: Root directory: ${rootDir}`);
-  console.log(`SERVER: Checking dist path: ${distPath}`);
-  console.log(`SERVER: Checking index path: ${indexPath}`);
+  let distPath = "";
+  let indexPath = "";
+  let distExists = false;
+  let indexExists = false;
 
-  const distExists = fs.existsSync(distPath);
-  const indexExists = fs.existsSync(indexPath);
+  for (const p of possibleDistPaths) {
+    const i = path.join(p, "index.html");
+    if (fs.existsSync(p) && fs.existsSync(i)) {
+      distPath = p;
+      indexPath = i;
+      distExists = true;
+      indexExists = true;
+      break;
+    }
+  }
 
-  console.log(`SERVER: dist exists: ${distExists}, index.html exists: ${indexExists}`);
+  console.log(`SERVER: Final distPath: ${distPath}`);
+  console.log(`SERVER: Final indexPath: ${indexPath}`);
+  console.log(`SERVER: distExists: ${distExists}, indexExists: ${indexExists}`);
 
-  // In production, we expect the dist folder to exist.
-  // In development, Vite middleware handles everything.
   if (distExists && indexExists) {
     console.log(`SERVER: Serving static files from ${distPath}`);
     app.use(express.static(distPath));
     
     app.get("*", (req, res) => {
-      // Don't serve index.html for missing API routes
       if (req.url.startsWith("/api/")) {
         return res.status(404).json({ error: `API route not found: ${req.url}` });
       }
       
-      // Double check index existence for the catch-all
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
       } else {
@@ -252,12 +265,19 @@ async function startServer() {
     });
   } else {
     console.log("SERVER: Falling back to Vite middleware (Development Mode)");
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } catch (e) {
+      console.error("SERVER ERROR: Failed to start Vite middleware", e);
+      app.get("*", (req, res) => {
+        res.status(500).send("Server is initializing or misconfigured. Please try again in a moment.");
+      });
+    }
   }
 
   // 6. Final 404
