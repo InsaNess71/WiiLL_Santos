@@ -38,6 +38,11 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // 0. Bind port IMMEDIATELY to avoid 404s from proxy during startup
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`SERVER_READY: Listening on 0.0.0.0:${PORT}`);
+  });
+
   // 1. Logging
   app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
@@ -217,6 +222,7 @@ async function startServer() {
   // 7. Static Files & SPA Fallback
   let distPath = path.resolve(__dirname, "dist");
   if (!fs.existsSync(distPath)) distPath = path.resolve(__dirname, "..", "dist");
+  if (!fs.existsSync(distPath)) distPath = path.resolve(process.cwd(), "dist");
 
   const isProd = process.env.NODE_ENV === "production" || fs.existsSync(distPath);
 
@@ -240,11 +246,6 @@ async function startServer() {
   // 8. Final API 404 handler
   app.all("/api/*", (req, res) => {
     res.status(404).json({ error: `Rota API não encontrada: ${req.originalUrl}` });
-  });
-
-  // 9. Start Listening
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`SERVER_READY: Running on http://0.0.0.0:${PORT}`);
   });
 }
 
