@@ -34,6 +34,7 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
   });
   const [isSaving, setIsSaving] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
@@ -377,57 +378,82 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
                       </button>
                     </div>
                   ) : (
-                    <button
-                      disabled={isProcessingPayment}
-                      onClick={async () => {
-                        setIsProcessingPayment(true);
-                        setError('');
-                        console.log("Iniciando checkout session...");
-                        try {
-                          const response = await fetch('/api/create-checkout-session', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ userId: auth.currentUser?.uid }),
-                          });
-                          console.log(`Resposta Checkout: ${response.status}`);
+                    checkoutUrl ? (
+                      <div className="text-center space-y-4">
+                        <p className="text-zinc-400 text-sm">O checkout foi aberto em uma nova aba.</p>
+                        <a
+                          href={checkoutUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block w-full py-3 bg-yellow-500 text-zinc-900 rounded-xl font-bold text-base hover:bg-yellow-400 transition-all shadow-lg shadow-yellow-500/10"
+                        >
+                          Clique aqui se não abriu
+                        </a>
+                        <button 
+                          onClick={() => { setCheckoutUrl(null); setIsProcessingPayment(false); }}
+                          className="text-zinc-500 text-xs hover:underline"
+                        >
+                          Cancelar e tentar novamente
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        disabled={isProcessingPayment}
+                        onClick={async () => {
+                          setIsProcessingPayment(true);
+                          setError('');
+                          setCheckoutUrl(null);
                           
-                          if (!response.ok) {
-                            const text = await response.text();
-                            console.error("Server error response:", text);
-                            let errorMessage = `Erro no servidor (${response.status})`;
-                            if (text.includes('NOT_FOUND') || text.includes('could not be found')) {
-                              errorMessage = 'Servidor não encontrado (404). Verifique se a rota da API está correta.';
-                            } else {
-                              errorMessage += `: ${text.slice(0, 50)}...`;
-                            }
-                            throw new Error(errorMessage);
+                          // 1. Try to open a blank window immediately
+                          const paymentWindow = window.open('', '_blank');
+                          if (paymentWindow) {
+                            paymentWindow.document.write('<p style="font-family:sans-serif;text-align:center;margin-top:50px;">Carregando checkout seguro...</p>');
                           }
+                          
+                          console.log("Iniciando checkout session...");
+                          try {
+                            const response = await fetch('/api/create-checkout-session', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ userId: auth.currentUser?.uid }),
+                            });
+                            
+                            if (!response.ok) {
+                              const text = await response.text();
+                              throw new Error(`Erro no servidor: ${text}`);
+                            }
 
-                          const data = await response.json();
-                          if (data.url) {
-                            const stripeWindow = window.open(data.url, '_blank');
-                            if (!stripeWindow) {
-                              window.location.href = data.url;
+                            const data = await response.json();
+                            if (data.url) {
+                              setCheckoutUrl(data.url);
+                              if (paymentWindow) {
+                                paymentWindow.location.href = data.url;
+                              } else {
+                                try {
+                                  window.top!.location.href = data.url;
+                                } catch (e) {
+                                  window.location.href = data.url;
+                                }
+                              }
+                            } else {
+                              throw new Error(data.error || 'Erro ao criar sessão');
                             }
+                          } catch (err: any) {
+                            console.error(err);
+                            if (paymentWindow) paymentWindow.close();
+                            setError(err.message || 'Erro ao iniciar pagamento.');
                             setIsProcessingPayment(false);
-                          } else {
-                            throw new Error(data.error || 'Erro ao criar sessão');
                           }
-                        } catch (err: any) {
-                          console.error(err);
-                          setError(err.message || 'Erro ao iniciar pagamento. Verifique suas chaves do Stripe.');
-                        } finally {
-                          setIsProcessingPayment(false);
-                        }
-                      }}
-                      className="w-full py-2.5 bg-yellow-500 hover:bg-yellow-400 text-zinc-900 font-bold rounded-xl transition-colors shadow-lg shadow-yellow-500/10 disabled:opacity-50 flex items-center justify-center space-x-2"
-                    >
-                      {isProcessingPayment ? (
-                        <div className="w-5 h-5 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <span>Assinar Premium - R$ 14,99 / mês</span>
-                      )}
-                    </button>
+                        }}
+                        className="w-full py-2.5 bg-yellow-500 hover:bg-yellow-400 text-zinc-900 font-bold rounded-xl transition-colors shadow-lg shadow-yellow-500/10 disabled:opacity-50 flex items-center justify-center space-x-2"
+                      >
+                        {isProcessingPayment ? (
+                          <div className="w-5 h-5 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <span>Assinar Premium - R$ 14,99 / mês</span>
+                        )}
+                      </button>
+                    )
                   )}
                 </div>
               )}

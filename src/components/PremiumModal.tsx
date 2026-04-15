@@ -12,6 +12,8 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+
   const handleSubscribe = async () => {
     if (!auth.currentUser) return;
     
@@ -21,6 +23,13 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
     }
 
     setIsProcessing(true);
+    setCheckoutUrl(null);
+    
+    // 1. Try to open a blank window immediately to preserve user gesture
+    const paymentWindow = window.open('', '_blank');
+    if (paymentWindow) {
+      paymentWindow.document.write('<p style="font-family:sans-serif;text-align:center;margin-top:50px;">Carregando checkout seguro...</p>');
+    }
     
     console.log("Iniciando checkout session...");
     try {
@@ -33,36 +42,35 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
           userId: auth.currentUser.uid,
         }),
       });
-      console.log(`Resposta Checkout: ${response.status}`);
 
       if (!response.ok) {
         const text = await response.text();
-        console.error("Server error response:", text);
-        let errorMessage = `Erro no servidor (${response.status})`;
-        if (text.includes('NOT_FOUND') || text.includes('could not be found')) {
-          errorMessage = 'Servidor não encontrado (404). Verifique se a rota da API está correta.';
-        } else {
-          errorMessage += `: ${text.slice(0, 50)}...`;
-        }
-        throw new Error(errorMessage);
+        throw new Error(`Erro no servidor: ${text}`);
       }
 
       const data = await response.json();
 
       if (data.url) {
-        const stripeWindow = window.open(data.url, '_blank');
-        if (!stripeWindow) {
-          // Fallback if popup is blocked
-          window.location.href = data.url;
+        setCheckoutUrl(data.url);
+        
+        if (paymentWindow) {
+          // 2. Update the already opened window
+          paymentWindow.location.href = data.url;
+        } else {
+          // 3. Fallback: Try top-level redirect if popup was blocked
+          try {
+            window.top!.location.href = data.url;
+          } catch (e) {
+            window.location.href = data.url;
+          }
         }
-        onClose();
       } else {
         throw new Error(data.error || 'Erro ao criar sessão de pagamento');
       }
     } catch (error: any) {
       console.error("Payment Error:", error);
-      alert(error.message || "Erro ao iniciar pagamento. Verifique suas chaves do Stripe.");
-    } finally {
+      if (paymentWindow) paymentWindow.close();
+      alert(error.message || "Erro ao iniciar pagamento.");
       setIsProcessing(false);
     }
   };
@@ -152,13 +160,33 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
               </div>
 
               <div className="space-y-4">
-                <button
-                  onClick={handleSubscribe}
-                  disabled={isProcessing}
-                  className="w-full py-5 bg-white text-zinc-950 rounded-2xl font-black text-lg hover:bg-zinc-100 transition-all shadow-xl shadow-white/5 active:scale-[0.98] disabled:opacity-50"
-                >
-                  {isProcessing ? 'Processando...' : 'Assinar por R$ 14,99 / mês'}
-                </button>
+                {checkoutUrl ? (
+                  <div className="text-center space-y-4">
+                    <p className="text-zinc-400 text-sm">O checkout foi aberto em uma nova aba.</p>
+                    <a
+                      href={checkoutUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block w-full py-5 bg-pink-600 text-white rounded-2xl font-black text-lg hover:bg-pink-500 transition-all shadow-xl shadow-pink-900/20"
+                    >
+                      Clique aqui se não abriu
+                    </a>
+                    <button 
+                      onClick={() => { setCheckoutUrl(null); setIsProcessing(false); }}
+                      className="text-zinc-500 text-xs hover:underline"
+                    >
+                      Cancelar e tentar novamente
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleSubscribe}
+                    disabled={isProcessing}
+                    className="w-full py-5 bg-white text-zinc-950 rounded-2xl font-black text-lg hover:bg-zinc-100 transition-all shadow-xl shadow-white/5 active:scale-[0.98] disabled:opacity-50"
+                  >
+                    {isProcessing ? 'Processando...' : 'Assinar por R$ 14,99 / mês'}
+                  </button>
+                )}
                 <p className="text-[10px] text-center text-zinc-600 px-8">
                   Ao assinar, você concorda com nossos Termos de Uso. O acesso Premium é válido por 30 dias e pode ser renovado.
                 </p>
