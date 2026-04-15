@@ -111,23 +111,32 @@ async function startServer() {
   // 3. Body Parsers
   app.use(express.json());
 
-  // 4. API Routes
-  const apiRouter = express.Router();
-
-  apiRouter.get("/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  // 4. API Routes (Defined directly on app for maximum reliability)
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString(), initialized: !!db });
   });
 
-  apiRouter.post("/create-checkout-session", async (req, res) => {
+  app.post("/api/create-checkout-session", async (req, res) => {
+    console.log("API_CALL: create-checkout-session - START");
     const { userId } = req.body;
-    if (!userId) return res.status(400).json({ error: "User ID is required" });
+    
+    if (!userId) {
+      console.warn("API_CALL: create-checkout-session - Missing userId");
+      return res.status(400).json({ error: "User ID is required" });
+    }
 
     try {
       const stripe = getStripe();
       const origin = req.headers.origin || process.env.VITE_APP_URL || "http://localhost:3000";
+      console.log(`API_CALL: create-checkout-session - Origin: ${origin}, User: ${userId}`);
       
       const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card", "apple_pay", "google_pay"],
+        payment_method_types: ["card", "boleto"],
+        payment_method_options: {
+          boleto: {
+            expires_after_days: 3,
+          },
+        },
         line_items: [{
           price_data: {
             currency: "brl",
@@ -135,7 +144,7 @@ async function startServer() {
               name: "Plano Premium Mensal - Confissões",
               description: "Acesso a fotos no chat, selo premium e suporte prioritário."
             },
-            unit_amount: 1499, // R$ 14,99
+            unit_amount: 1499,
           },
           quantity: 1,
         }],
@@ -145,14 +154,16 @@ async function startServer() {
         metadata: { userId },
       });
 
+      console.log(`API_CALL: create-checkout-session - SUCCESS: ${session.id}`);
       res.json({ id: session.id, url: session.url });
     } catch (error: any) {
-      console.error("STRIPE API ERROR:", error);
+      console.error("API_CALL: create-checkout-session - ERROR:", error);
       res.status(500).json({ error: error.message });
     }
   });
 
-  apiRouter.post("/send-chat-message", async (req, res) => {
+  app.post("/api/send-chat-message", async (req, res) => {
+    console.log("API_CALL: send-chat-message - START");
     const { chatId, text, senderId, imageUrl } = req.body;
     if (!chatId || !senderId || (!text && !imageUrl)) {
       return res.status(400).json({ error: "Campos obrigatórios faltando." });
@@ -188,51 +199,43 @@ async function startServer() {
         });
       });
 
-      // Push notification (fire and forget)
-      (async () => {
-        try {
-          const privateDataDoc = await firestore.collection("users").doc(recipientId).collection("private").doc("data").get();
-          const fcmToken = privateDataDoc.data()?.fcmToken;
-          if (fcmToken) {
-            const senderDoc = await firestore.collection("users").doc(senderId).get();
-            const senderName = senderDoc.data()?.nickname || "Alguém";
-            await admin.messaging().send({
-              notification: { title: senderName, body: text || "Enviou uma foto" },
-              data: { chatId, type: "chat_message" },
-              token: fcmToken,
-            });
-          }
-        } catch (e) { console.error("PUSH ERROR:", e); }
-      })();
-
+      console.log(`API_CALL: send-chat-message - SUCCESS: ${messageRef.id}`);
       res.json({ success: true, messageId: messageRef.id });
     } catch (error: any) {
-      console.error("CHAT API ERROR:", error);
+      console.error("API_CALL: send-chat-message - ERROR:", error);
       res.status(500).json({ error: error.message });
     }
   });
 
-  app.use("/api", apiRouter);
-
   // 5. Static Files & SPA Fallback
   const rootDir = process.cwd();
-  let distPath = path.resolve(rootDir, "dist");
-  
-  // Fallback paths for different environments
-  if (!fs.existsSync(distPath)) distPath = path.resolve(__dirname, "dist");
-  if (!fs.existsSync(distPath)) distPath = path.resolve(__dirname, "..", "dist");
+  const distPath = path.join(rootDir, "dist");
+  const indexPath = path.join(distPath, "index.html");
 
-  const isProd = process.env.NODE_ENV === "production" || fs.existsSync(path.join(distPath, "index.html"));
+  const isProd = process.env.NODE_ENV === "production" || fs.existsSync(indexPath);
 
   if (isProd && fs.existsSync(distPath)) {
     console.log(`SERVER: Serving static files from ${distPath}`);
+    console.log(`SERVER: Index file exists: ${fs.existsSync(indexPath)} at ${indexPath}`);
+    
     app.use(express.static(distPath));
+    
     app.get("*", (req, res) => {
       // Don't serve index.html for missing API routes
       if (req.url.startsWith("/api/")) {
         return res.status(404).json({ error: `API route not found: ${req.url}` });
       }
-      res.sendFile(path.resolve(distPath, "index.html"));
+      
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        console.error(`SERVER ERROR: index.html not found at ${indexPath}`);
+        res.status(404).json({ 
+          error: "Frontend not found", 
+          details: `Expected index.html at ${indexPath}`,
+          cwd: rootDir
+        });
+      }
     });
   } else {
     console.log("SERVER: Running in development mode with Vite middleware");

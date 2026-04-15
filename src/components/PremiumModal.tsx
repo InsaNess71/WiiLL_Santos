@@ -50,8 +50,11 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
       const data = await response.json();
 
       if (data.url) {
-        // Redirect to Stripe Checkout in a new tab
-        window.open(data.url, '_blank');
+        const stripeWindow = window.open(data.url, '_blank');
+        if (!stripeWindow) {
+          // Fallback if popup is blocked
+          window.location.href = data.url;
+        }
         onClose();
       } else {
         throw new Error(data.error || 'Erro ao criar sessão de pagamento');

@@ -405,8 +405,11 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
 
                           const data = await response.json();
                           if (data.url) {
-                            // Abre em uma nova aba para evitar o bloqueio do iframe
-                            window.open(data.url, '_blank');
+                            const stripeWindow = window.open(data.url, '_blank');
+                            if (!stripeWindow) {
+                              window.location.href = data.url;
+                            }
+                            setIsProcessingPayment(false);
                           } else {
                             throw new Error(data.error || 'Erro ao criar sessão');
                           }
