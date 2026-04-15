@@ -221,12 +221,19 @@ async function startServer() {
   const distPath = path.join(rootDir, "dist");
   const indexPath = path.join(distPath, "index.html");
 
-  const isProd = process.env.NODE_ENV === "production" || fs.existsSync(indexPath);
+  console.log(`SERVER: Root directory: ${rootDir}`);
+  console.log(`SERVER: Checking dist path: ${distPath}`);
+  console.log(`SERVER: Checking index path: ${indexPath}`);
 
-  if (isProd && fs.existsSync(distPath)) {
+  const distExists = fs.existsSync(distPath);
+  const indexExists = fs.existsSync(indexPath);
+
+  console.log(`SERVER: dist exists: ${distExists}, index.html exists: ${indexExists}`);
+
+  // In production, we expect the dist folder to exist.
+  // In development, Vite middleware handles everything.
+  if (distExists && indexExists) {
     console.log(`SERVER: Serving static files from ${distPath}`);
-    console.log(`SERVER: Index file exists: ${fs.existsSync(indexPath)} at ${indexPath}`);
-    
     app.use(express.static(distPath));
     
     app.get("*", (req, res) => {
@@ -235,19 +242,16 @@ async function startServer() {
         return res.status(404).json({ error: `API route not found: ${req.url}` });
       }
       
+      // Double check index existence for the catch-all
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
       } else {
-        console.error(`SERVER ERROR: index.html not found at ${indexPath}`);
-        res.status(404).json({ 
-          error: "Frontend not found", 
-          details: `Expected index.html at ${indexPath}`,
-          cwd: rootDir
-        });
+        console.error(`SERVER ERROR: index.html missing during request to ${req.url}`);
+        res.status(404).send("Frontend application files are missing. Please rebuild.");
       }
     });
   } else {
-    console.log("SERVER: Running in development mode with Vite middleware");
+    console.log("SERVER: Falling back to Vite middleware (Development Mode)");
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
