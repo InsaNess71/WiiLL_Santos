@@ -113,7 +113,16 @@ async function startServer() {
 
   // 4. API Routes (Defined directly on app for maximum reliability)
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString(), initialized: !!db });
+    res.json({ 
+      status: "ok", 
+      timestamp: new Date().toISOString(), 
+      initialized: !!db,
+      stripe: {
+        hasSecretKey: !!process.env.STRIPE_SECRET_KEY,
+        hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
+        hasPublishableKey: !!process.env.VITE_STRIPE_PUBLISHABLE_KEY
+      }
+    });
   });
 
   app.post("/api/create-checkout-session", async (req, res) => {
