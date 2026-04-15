@@ -13,6 +13,7 @@ import { getUserProfile, isPremiumActive } from '../lib/userCache';
 // Lazy loaded components
 const CommentSection = lazy(() => import('./CommentSection'));
 const UserProfileModal = lazy(() => import('./UserProfileModal'));
+const ShareModal = lazy(() => import('./ShareModal'));
 
 interface ConfessionCardProps {
   confession: Confession;
@@ -157,27 +158,10 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
 
   const cardRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
-  const handleExportImage = async () => {
-    if (!cardRef.current || isExporting) return;
-    setIsExporting(true);
-    try {
-      const dataUrl = await toPng(cardRef.current, {
-        cacheBust: true,
-        backgroundColor: '#09090b',
-        style: {
-          borderRadius: '0px',
-        }
-      });
-      const link = document.createElement('a');
-      link.download = `confissao-${confession.id.slice(0, 5)}.png`;
-      link.href = dataUrl;
-      link.click();
-    } catch (err) {
-      console.error('Error exporting image:', err);
-    } finally {
-      setIsExporting(false);
-    }
+  const handleExportImage = () => {
+    setShowShareModal(true);
   };
 
   const handleShare = async () => {
@@ -535,6 +519,18 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
               </button>
             </div>
           </motion.div>
+        )}
+
+        {showShareModal && (
+          <Suspense fallback={null}>
+            <ShareModal
+              confession={confession}
+              authorNickname={authorNickname}
+              authorAvatar={authorAvatar}
+              authorProfile={authorProfile}
+              onClose={() => setShowShareModal(false)}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
       </div>

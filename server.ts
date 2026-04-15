@@ -229,18 +229,17 @@ async function startServer() {
   // 5. Static Files & SPA Fallback
   const rootDir = process.cwd();
   
-  // Try multiple locations for dist folder
+  // Resolve paths absolutely to avoid any ambiguity
   const possibleDistPaths = [
-    path.join(rootDir, "dist"),
+    path.resolve(rootDir, "dist"),
     path.resolve(__dirname, "dist"),
     path.resolve(__dirname, "..", "dist"),
-    "/app/applet/dist"
+    path.join(rootDir, "dist")
   ];
 
   let distPath = "";
   let indexPath = "";
   let distExists = false;
-  let indexExists = false;
 
   for (const p of possibleDistPaths) {
     const i = path.join(p, "index.html");
@@ -248,33 +247,46 @@ async function startServer() {
       distPath = p;
       indexPath = i;
       distExists = true;
-      indexExists = true;
       break;
     }
   }
 
-  console.log(`SERVER: Final distPath: ${distPath}`);
-  console.log(`SERVER: Final indexPath: ${indexPath}`);
-  console.log(`SERVER: distExists: ${distExists}, indexExists: ${indexExists}`);
+  console.log(`SERVER: Final distPath resolved to: ${distPath}`);
+  console.log(`SERVER: Final indexPath resolved to: ${indexPath}`);
 
-  if (distExists && indexExists) {
+  if (distExists) {
     console.log(`SERVER: Serving static files from ${distPath}`);
-    app.use(express.static(distPath));
+    // Use absolute path for express.static
+    app.use(express.static(distPath, {
+      maxAge: '1d',
+      etag: true
+    }));
     
     app.get("*", (req, res) => {
+      // 1. Ignore API routes
       if (req.url.startsWith("/api/")) {
         return res.status(404).json({ error: `API route not found: ${req.url}` });
       }
       
+      // 2. Ignore missing assets (don't serve index.html for .js, .css, etc.)
+      const isAsset = /\.(js|css|png|jpg|jpeg|gif|svg|ico|json|webmanifest)$/.test(req.url.split('?')[0]);
+      if (isAsset) {
+        console.warn(`SERVER: Asset not found: ${req.url}`);
+        return res.status(404).send("Asset not found");
+      }
+
+      // 3. Serve index.html for SPA routes
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
       } else {
-        console.error(`SERVER ERROR: index.html missing during request to ${req.url}`);
-        res.status(404).send("Frontend application files are missing. Please rebuild.");
+        // This should theoretically not happen if distExists was true, 
+        // but we handle it just in case of disk changes
+        console.error(`SERVER ERROR: index.html disappeared from ${indexPath}`);
+        res.status(500).send("Application error: index.html missing.");
       }
     });
   } else {
-    console.log("SERVER: Falling back to Vite middleware (Development Mode)");
+    console.log("SERVER: No dist folder found. Falling back to Vite middleware (Development Mode)");
     try {
       const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({

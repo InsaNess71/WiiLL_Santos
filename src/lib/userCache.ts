@@ -40,8 +40,8 @@ export const updateUserCache = (userId: string, updatedData: Partial<UserProfile
 export const isPremiumActive = (profile: UserProfile | null): boolean => {
   if (!profile) return false;
   
-  // Admins have permanent premium access
-  if (profile.role === 'admin') return true;
+  // Admins no longer have permanent premium access by default to allow testing
+  // if (profile.role === 'admin') return true;
   
   if (!profile.isPremium) return false;
   if (!profile.premiumUntil) return true; // Legacy vitalício

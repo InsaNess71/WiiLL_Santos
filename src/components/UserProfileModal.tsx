@@ -351,6 +351,29 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
             </div>
           ) : (
             <>
+              {isMe && (
+                <div className="mb-4">
+                  <button
+                    onClick={async () => {
+                      if (!auth.currentUser) return;
+                      try {
+                        await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+                          isPremium: false,
+                          premiumUntil: null
+                        });
+                        alert('Status Premium resetado! Feche e abra o perfil para ver a mudança.');
+                        window.location.reload(); // Force reload to clear all caches
+                      } catch (err) {
+                        console.error(err);
+                      }
+                    }}
+                    className="w-full py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[10px] uppercase font-black rounded-xl transition-all border border-red-500/20 mb-4"
+                  >
+                    ⚠️ Resetar meu Premium para Teste
+                  </button>
+                </div>
+              )}
+
               {isMe && !isPremiumActiveStatus && (
                 <div className="mb-6 p-4 bg-gradient-to-br from-yellow-500/20 to-pink-500/20 border border-yellow-500/30 rounded-2xl">
                   <div className="flex items-center space-x-3 mb-3">
