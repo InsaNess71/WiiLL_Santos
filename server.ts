@@ -26,12 +26,24 @@ function getStripe() {
 async function startServer() {
   const app = express();
   const PORT = 3000;
+  let isInitialized = false;
 
-  console.log(`SERVER_START: Starting initialization (Mode: ${process.env.NODE_ENV || 'development'})`);
+  // 0. Bind port IMMEDIATELY to satisfy the proxy and avoid 404s
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`SERVER_READY: Listening on 0.0.0.0:${PORT} (Mode: ${process.env.NODE_ENV || 'development'})`);
+  });
 
-  // 1. Logging Middleware
+  // 1. Logging & Init Guard
   app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    
+    // If API is called before initialization, return 503
+    if (req.url.startsWith("/api/") && !isInitialized && req.url !== "/api/health") {
+      return res.status(503).json({ 
+        error: "Servidor inicializando", 
+        message: "O servidor está carregando os componentes necessários. Por favor, tente novamente em alguns segundos." 
+      });
+    }
     next();
   });
 
@@ -253,10 +265,9 @@ async function startServer() {
     res.status(404).json({ error: "Not Found", path: req.url });
   });
 
-  // 9. Start Listening
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`SERVER_READY: Listening on 0.0.0.0:${PORT}`);
-  });
+  // 9. Mark as Initialized
+  isInitialized = true;
+  console.log("SERVER_INIT_COMPLETE: All routes and middlewares are ready.");
 }
 
 startServer().catch(err => {
