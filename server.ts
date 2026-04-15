@@ -27,23 +27,24 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // 0. Bind port IMMEDIATELY to satisfy the proxy and avoid 404s
-  const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`SERVER_STATUS: Listening on 0.0.0.0:${PORT} (Mode: ${process.env.NODE_ENV || 'development'})`);
-  });
+  console.log(`SERVER_START: Starting initialization (Mode: ${process.env.NODE_ENV || 'development'})`);
 
-  // 1. Logging Middleware - Log EVERY request to see what's reaching the server
+  // 1. Logging Middleware
   app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
     next();
   });
 
-  // 2. Health Check - Return 200 immediately
+  // 2. Health Check & Ping
   app.get("/api/health", (req, res) => {
-    res.status(200).json({ status: "ok", uptime: process.uptime() });
+    res.status(200).json({ status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString() });
   });
 
-  // 3. Stripe Webhook (Raw Body) - MUST be before express.json()
+  app.get("/api/ping", (req, res) => {
+    res.status(200).send("pong");
+  });
+
+  // 3. Stripe Webhook (Raw Body)
   app.post("/api/webhook", express.raw({ type: "application/json" }), async (req, res) => {
     console.log("WEBHOOK_RECEIVED");
     const sig = req.headers["stripe-signature"] as string;
@@ -95,10 +96,10 @@ async function startServer() {
     }
   });
 
-  // 4. General Middlewares
+  // 4. JSON Middleware
   app.use(express.json());
 
-  // 5. Firebase Initialization (Safe)
+  // 5. Firebase Initialization
   let db: any;
   try {
     const configPath = fs.existsSync(path.join(__dirname, "firebase-applet-config.json"))
@@ -212,11 +213,9 @@ async function startServer() {
     console.log(`SERVER_STATIC: Serving from ${distPath}`);
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      // If it's an API route that wasn't matched, return 404 JSON
       if (req.url.startsWith("/api/")) {
         return res.status(404).json({ error: `API route not found: ${req.url}` });
       }
-      // Otherwise serve index.html for SPA routing
       res.sendFile(path.resolve(distPath, "index.html"));
     });
   } else {
@@ -229,9 +228,14 @@ async function startServer() {
     app.use(vite.middlewares);
   }
 
-  // 8. Final Catch-all for anything else
+  // 8. Final Catch-all
   app.use((req, res) => {
-    res.status(404).json({ error: "Not Found" });
+    res.status(404).json({ error: "Not Found", path: req.url });
+  });
+
+  // 9. Start Listening
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`SERVER_READY: Listening on 0.0.0.0:${PORT}`);
   });
 }
 
