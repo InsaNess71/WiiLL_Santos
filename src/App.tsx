@@ -9,7 +9,6 @@ import SkeletonCard from './components/SkeletonCard';
 import SplashScreen from './components/SplashScreen';
 import { Ghost, PenSquare, Flame, Clock, Filter, LogIn, MessageSquare, LogOut, User, Search, X, Trophy, Home, Bell, ShieldAlert, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { isPremiumActive } from './lib/userCache';
 import { playNotificationSound } from './lib/audio';
 
 type SortOption = 'recent' | 'popular' | 'top_week';
@@ -558,7 +557,7 @@ export default function App() {
                   <button 
                     onClick={signInAnonymouslyUser}
                     className="flex items-center space-x-1.5 sm:space-x-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-colors border border-zinc-700"
-                    title="Entrar como Visitante (Recursos Premium bloqueados)"
+                    title="Entrar como Visitante"
                   >
                     <Ghost className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     <span className="hidden xs:inline">Visitante</span>
@@ -751,7 +750,7 @@ export default function App() {
 
       <Suspense fallback={null}>
         <AnimatePresence>
-          {showCreate && <CreateConfession onClose={() => setShowCreate(false)} isPremium={isPremiumActive(currentUserProfile)} />}
+          {showCreate && <CreateConfession onClose={() => setShowCreate(false)} />}
           {needsNickname && <NicknameModal onComplete={() => setNeedsNickname(false)} />}
           {showMyProfile && user && <UserProfileModal userId={user.uid} onClose={() => setShowMyProfile(false)} />}
           {selectedUserId && <UserProfileModal userId={selectedUserId} onClose={() => setSelectedUserId(null)} />}

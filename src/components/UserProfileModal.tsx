@@ -8,7 +8,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import PrivacyPolicy from './PrivacyPolicy';
 import TermsOfUse from './TermsOfUse';
-import { getUserProfile, updateUserCache, isPremiumActive } from '../lib/userCache';
+import { getUserProfile, updateUserCache } from '../lib/userCache';
 
 interface UserProfileModalProps {
   userId: string;
@@ -33,8 +33,6 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
     avatar: ''
   });
   const [isSaving, setIsSaving] = useState(false);
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
@@ -155,7 +153,6 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
 
   const isMe = auth.currentUser?.uid === userId;
   const isAdmin = currentUserProfile?.role === 'admin';
-  const isPremiumActiveStatus = isPremiumActive(profile);
   const nickname = profile?.nickname || 'Usuário Anônimo';
 
   const handleDeleteUser = async () => {
@@ -227,9 +224,6 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
                 <>
                   <div className="flex items-center space-x-2">
                     <h2 className="text-xl font-bold text-zinc-100">{nickname}</h2>
-                    {isPremiumActiveStatus && (
-                      <Crown className="w-5 h-5 text-yellow-500 fill-yellow-500" />
-                    )}
                     {profile?.isVerified && (
                       <ShieldCheck className="w-5 h-5 text-blue-400" />
                     )}
@@ -351,153 +345,6 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
             </div>
           ) : (
             <>
-              {isMe && (
-                <div className="mb-4">
-                  <button
-                    onClick={async () => {
-                      if (!auth.currentUser) return;
-                      try {
-                        await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-                          isPremium: false,
-                          premiumUntil: null
-                        });
-                        alert('Status Premium resetado! Feche e abra o perfil para ver a mudança.');
-                        window.location.reload(); // Force reload to clear all caches
-                      } catch (err) {
-                        console.error(err);
-                      }
-                    }}
-                    className="w-full py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[10px] uppercase font-black rounded-xl transition-all border border-red-500/20 mb-4"
-                  >
-                    ⚠️ Resetar meu Premium para Teste
-                  </button>
-                </div>
-              )}
-
-              {isMe && !isPremiumActiveStatus && (
-                <div className="mb-6 p-4 bg-gradient-to-br from-yellow-500/20 to-pink-500/20 border border-yellow-500/30 rounded-2xl">
-                  <div className="flex items-center space-x-3 mb-3">
-                    <div className="bg-yellow-500 p-2 rounded-lg">
-                      <Crown className="w-5 h-5 text-zinc-900" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-zinc-100">Seja Premium</h4>
-                      <p className="text-xs text-zinc-400">30 dias de acesso a recursos exclusivos.</p>
-                    </div>
-                  </div>
-                  
-                  {auth.currentUser?.isAnonymous ? (
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-center">
-                      <p className="text-xs text-zinc-400 mb-2">Visitantes não podem assinar o Premium. Entre com uma conta Google para salvar seu progresso e assinar.</p>
-                      <button
-                        onClick={() => {
-                          onClose();
-                          // Dispatch event or call sign in
-                          window.dispatchEvent(new CustomEvent('requestGoogleSignIn'));
-                        }}
-                        className="text-xs font-bold text-pink-500 hover:text-pink-400 underline"
-                      >
-                        Entrar com Google agora
-                      </button>
-                    </div>
-                  ) : (
-                    checkoutUrl ? (
-                      <div className="text-center space-y-4">
-                        <p className="text-zinc-400 text-sm">O checkout foi aberto em uma nova aba.</p>
-                        <a
-                          href={checkoutUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-block w-full py-3 bg-yellow-500 text-zinc-900 rounded-xl font-bold text-base hover:bg-yellow-400 transition-all shadow-lg shadow-yellow-500/10"
-                        >
-                          Clique aqui se não abriu
-                        </a>
-                        <button 
-                          onClick={() => { setCheckoutUrl(null); setIsProcessingPayment(false); }}
-                          className="text-zinc-500 text-xs hover:underline"
-                        >
-                          Cancelar e tentar novamente
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        disabled={isProcessingPayment}
-                        onClick={async () => {
-                          setIsProcessingPayment(true);
-                          setError('');
-                          setCheckoutUrl(null);
-                          
-                          // 1. Try to open a blank window immediately to avoid popup blocker
-                          const paymentWindow = window.open('about:blank', '_blank');
-                          if (paymentWindow) {
-                            paymentWindow.document.write(`
-                              <html>
-                                <head><title>Carregando Pagamento...</title></head>
-                                <body style="background:#09090b;color:#a1a1aa;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;">
-                                  <div style="width:40px;height:40px;border:3px solid #3f3f46;border-top-color:#db2777;border-radius:50%;animation:spin 1s linear infinite;"></div>
-                                  <p style="margin-top:20px;font-weight:bold;">Preparando seu checkout seguro...</p>
-                                  <p style="font-size:12px;color:#71717a;">Você será redirecionado em instantes.</p>
-                                  <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
-                                </body>
-                              </html>
-                            `);
-                          }
-                          
-                          try {
-                            const response = await fetch('/api/create-checkout-session', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ userId: auth.currentUser?.uid }),
-                            });
-                            
-                            if (!response.ok) {
-                              const text = await response.text();
-                              let errorMsg = `Erro ${response.status}`;
-                              try {
-                                const errorData = JSON.parse(text);
-                                errorMsg = errorData.error || errorMsg;
-                              } catch (e) {
-                                errorMsg = text || errorMsg;
-                              }
-                              throw new Error(errorMsg);
-                            }
-
-                            const data = await response.json();
-                            if (data.url) {
-                              setCheckoutUrl(data.url);
-                              if (paymentWindow && !paymentWindow.closed) {
-                                paymentWindow.location.href = data.url;
-                              } else {
-                                // Fallback: if popup was blocked or closed, try top-level redirect or just show the link
-                                try {
-                                  window.top!.location.href = data.url;
-                                } catch (e) {
-                                  window.location.href = data.url;
-                                }
-                              }
-                            } else {
-                              throw new Error('URL de checkout não recebida');
-                            }
-                          } catch (err: any) {
-                            console.error("Erro no Checkout:", err);
-                            if (paymentWindow) paymentWindow.close();
-                            setError(`Não foi possível iniciar o pagamento: ${err.message}`);
-                            setIsProcessingPayment(false);
-                          }
-                        }}
-                        className="w-full py-2.5 bg-yellow-500 hover:bg-yellow-400 text-zinc-900 font-bold rounded-xl transition-colors shadow-lg shadow-yellow-500/10 disabled:opacity-50 flex items-center justify-center space-x-2"
-                      >
-                        {isProcessingPayment ? (
-                          <div className="w-5 h-5 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <span>Assinar Premium - R$ 14,99 / mês</span>
-                        )}
-                      </button>
-                    )
-                  )}
-                </div>
-              )}
-
               {(profile?.bio || profile?.gender || profile?.maritalStatus) && (
                 <div className="mb-6 space-y-4">
                   {profile.bio && (

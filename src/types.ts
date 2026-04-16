@@ -39,8 +39,6 @@ export interface UserProfile {
   role?: 'admin' | 'user';
   isVerified?: boolean;
   isShadowBanned?: boolean;
-  isPremium?: boolean;
-  premiumUntil?: Timestamp | any;
   isAnonymous?: boolean;
   karma?: number;
 }

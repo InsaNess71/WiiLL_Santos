@@ -1,5 +1,4 @@
 import express from "express";
-import Stripe from "stripe";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import path from "path";
@@ -9,17 +8,6 @@ import fs from "fs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // --- CONFIGURATION & INITIALIZATION ---
-
-// Stripe Initialization (Lazy)
-let stripeClient: Stripe | null = null;
-function getStripe() {
-  if (!stripeClient) {
-    const key = process.env.STRIPE_SECRET_KEY;
-    if (!key) throw new Error("STRIPE_SECRET_KEY is not defined in environment variables.");
-    stripeClient = new Stripe(key, { apiVersion: "2024-06-20" as any });
-  }
-  return stripeClient;
-}
 
 // Firebase Initialization (Safe)
 let db: any;
@@ -34,10 +22,31 @@ function initFirebase() {
     
     const firebaseConfig = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf8")) : {};
     if (!admin.apps.length) {
-      admin.initializeApp({ projectId: firebaseConfig.projectId });
+      if (firebaseConfig.projectId) {
+        admin.initializeApp({ projectId: firebaseConfig.projectId });
+      } else {
+        // Fallback for environment without config file
+        admin.initializeApp();
+      }
     }
-    db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId);
-    messaging = admin.messaging();
+    // Try named database first, then fallback to default
+    try {
+      if (firebaseConfig.firestoreDatabaseId) {
+        db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId);
+      } else {
+        db = getFirestore(admin.app());
+      }
+    } catch (e) {
+      console.warn("FIREBASE: Firestore connection failed, trying default...");
+      db = getFirestore(admin.app());
+    }
+    
+    try {
+      messaging = admin.messaging();
+    } catch (e) {
+      console.warn("FIREBASE: Cloud Messaging not available in this environment.");
+      messaging = null;
+    }
     console.log("FIREBASE: Initialized successfully");
     return { db, messaging };
   } catch (e) {
@@ -76,8 +85,12 @@ async function sendNotification(userId: string, title: string, body: string, dat
       }
     });
     console.log(`FCM: Notification sent to user ${userId}`);
-  } catch (err) {
-    console.error(`FCM ERROR: Failed to send to ${userId}`, err);
+  } catch (err: any) {
+    if (err.code === 7 || err.message?.includes('PERMISSION_DENIED')) {
+      console.warn(`FCM: Notification skipped for ${userId} due to missing permissions (expected in preview environment).`);
+    } else {
+      console.error(`FCM ERROR: Failed to send to ${userId}`, err);
+    }
   }
 }
 
@@ -93,59 +106,6 @@ async function startServer() {
     next();
   });
 
-  // 2. Stripe Webhook (MUST be before express.json())
-  app.post("/api/webhook", express.raw({ type: "application/json" }), async (req, res) => {
-    const sig = req.headers["stripe-signature"] as string;
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-    
-    if (!webhookSecret) {
-      console.error("WEBHOOK: STRIPE_WEBHOOK_SECRET is missing");
-      return res.status(500).json({ error: "Webhook secret missing" });
-    }
-
-    try {
-      const stripe = getStripe();
-      const event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-
-      if (event.type === "checkout.session.completed") {
-        const session = event.data.object as Stripe.Checkout.Session;
-        const userId = session.metadata?.userId;
-        
-        if (userId) {
-          console.log(`WEBHOOK: Payment success for user ${userId}`);
-          const { db } = initFirebase();
-          if (db) {
-            const userRef = db.collection("users").doc(userId);
-            const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
-            const userDoc = await userRef.get();
-            
-            let newPremiumUntil: Date;
-            if (userDoc.exists) {
-              const userData = userDoc.data();
-              const currentPremiumUntil = userData?.premiumUntil?.toDate?.() || new Date(0);
-              newPremiumUntil = currentPremiumUntil > new Date() 
-                ? new Date(currentPremiumUntil.getTime() + thirtyDaysInMs) 
-                : new Date(Date.now() + thirtyDaysInMs);
-            } else {
-              newPremiumUntil = new Date(Date.now() + thirtyDaysInMs);
-            }
-
-            await userRef.set({
-              isPremium: true,
-              premiumUntil: admin.firestore.Timestamp.fromDate(newPremiumUntil),
-              premiumSince: admin.firestore.FieldValue.serverTimestamp(),
-            }, { merge: true });
-            console.log(`WEBHOOK: User ${userId} updated to Premium until ${newPremiumUntil}`);
-          }
-        }
-      }
-      res.json({ received: true });
-    } catch (err: any) {
-      console.error(`WEBHOOK ERROR: ${err.message}`);
-      res.status(400).send(`Webhook Error: ${err.message}`);
-    }
-  });
-
   // 3. Body Parsers
   app.use(express.json());
 
@@ -158,67 +118,8 @@ async function startServer() {
     res.json({ 
       status: "ok", 
       timestamp: new Date().toISOString(), 
-      initialized: !!db,
-      stripe: {
-        hasSecretKey: !!process.env.STRIPE_SECRET_KEY,
-        hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
-        hasPublishableKey: !!process.env.VITE_STRIPE_PUBLISHABLE_KEY
-      }
+      initialized: !!db
     });
-  });
-
-  apiRouter.post("/create-checkout-session", async (req, res) => {
-    console.log("API_CALL: create-checkout-session - START");
-    const { userId } = req.body;
-    
-    if (!userId) {
-      console.warn("API_CALL: create-checkout-session - Missing userId");
-      return res.status(400).json({ error: "User ID is required" });
-    }
-
-    try {
-      const stripe = getStripe();
-      let origin = req.headers.origin || process.env.VITE_APP_URL || "http://localhost:3000";
-      
-      // Sanitize origin: remove trailing slash and ensure it's a valid URL
-      origin = origin.replace(/\/$/, "");
-      if (!origin.startsWith('http')) origin = `https://${origin}`;
-
-      console.log(`API_CALL: create-checkout-session - Sanitized Origin: ${origin}, User: ${userId}`);
-      
-      const sessionOptions: Stripe.Checkout.SessionCreateParams = {
-        payment_method_types: ["card", "boleto"],
-        payment_method_options: {
-          boleto: {
-            expires_after_days: 3,
-          },
-        },
-        line_items: [{
-          price_data: {
-            currency: "brl",
-            product_data: { 
-              name: "Plano Premium Mensal - Confissões",
-              description: "Acesso a fotos no chat, selo premium e suporte prioritário."
-            },
-            unit_amount: 1499,
-          },
-          quantity: 1,
-        }],
-        mode: "payment",
-        success_url: `${origin}/?payment=success`,
-        cancel_url: `${origin}/?payment=cancel`,
-        metadata: { userId },
-      };
-
-      console.log("API_CALL: create-checkout-session - Creating session with options:", JSON.stringify(sessionOptions, null, 2));
-      const session = await stripe.checkout.sessions.create(sessionOptions);
-
-      console.log(`API_CALL: create-checkout-session - SUCCESS: ${session.id}`);
-      res.json({ id: session.id, url: session.url });
-    } catch (error: any) {
-      console.error("API_CALL: create-checkout-session - ERROR:", error);
-      res.status(500).json({ error: error.message });
-    }
   });
 
   apiRouter.post("/send-chat-message", async (req, res) => {

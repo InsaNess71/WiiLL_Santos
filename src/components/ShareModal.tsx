@@ -1,10 +1,9 @@
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Download, Share2, Crown, User, Flame } from 'lucide-react';
+import { X, Download, Share2, User, Flame, Ghost } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { Confession, UserProfile } from '../types';
 import { cn } from '../lib/utils';
-import { isPremiumActive } from '../lib/userCache';
 
 interface ShareModalProps {
   confession: Confession;
@@ -108,7 +107,6 @@ export default function ShareModal({ confession, authorNickname, authorAvatar, a
                 <p className={cn("font-bold text-base", authorProfile?.role === 'admin' ? "text-pink-400" : "text-zinc-100")}>
                   {authorNickname}
                 </p>
-                {isPremiumActive(authorProfile) && <Crown className="w-3 h-3 text-yellow-500 fill-yellow-500" />}
               </div>
               <p className="text-[10px] uppercase tracking-widest font-black text-pink-500/80">
                 {confession.category}
@@ -140,7 +138,7 @@ export default function ShareModal({ confession, authorNickname, authorAvatar, a
           <div className="relative z-10 pt-8 border-t border-zinc-800/50 flex flex-col items-center">
             <div className="flex items-center space-x-2 mb-2">
               <div className="w-6 h-6 bg-pink-600 rounded-lg flex items-center justify-center">
-                <Crown className="w-4 h-4 text-white fill-white" />
+                <Ghost className="w-4 h-4 text-white fill-white" />
               </div>
               <span className="text-sm font-black tracking-tighter text-zinc-100 uppercase italic">Confissões Anônimas</span>
             </div>

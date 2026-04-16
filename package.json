@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "start": "NODE_ENV=production node dist-server/server.js",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=esm --outfile=dist-server/server.js --external:express --external:vite --external:stripe --external:firebase-admin --external:path --external:fs --external:url",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=esm --outfile=dist-server/server.js --external:express --external:vite --external:firebase-admin --external:path --external:fs --external:url",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
@@ -27,7 +27,6 @@
     "motion": "^12.23.24",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "stripe": "^22.0.1",
     "tailwind-merge": "^3.5.0",
     "tsx": "^4.21.0",
     "vite": "^6.2.0"

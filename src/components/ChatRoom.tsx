@@ -6,8 +6,7 @@ import { Chat, ChatMessage, UserProfile } from '../types';
 import { Send, Clock, AlertTriangle, ArrowLeft, User, Camera, Crown, Trash2, X, Upload, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import PremiumModal from './PremiumModal';
-import { getUserProfile, isPremiumActive } from '../lib/userCache';
+import { getUserProfile } from '../lib/userCache';
 
 interface ChatRoomProps {
   chatId: string;
@@ -23,7 +22,6 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [otherUser, setOtherUser] = useState<UserProfile | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
-  const [showPremiumModal, setShowPremiumModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -137,7 +135,7 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
           chatId,
           text,
           senderId: auth.currentUser.uid,
-          imageUrl: isPremiumActive(currentUserProfile) ? currentImageUrl : null
+          imageUrl: currentImageUrl
         })
       });
 
@@ -198,7 +196,7 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
           createdAt: serverTimestamp(),
           isSystem: false
         };
-        if (isPremiumActive(currentUserProfile) && currentImageUrl) {
+        if (currentImageUrl) {
           messageData.imageUrl = currentImageUrl;
         }
         await addDoc(collection(db, 'chats', chatId, 'messages'), messageData);
@@ -235,11 +233,6 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !auth.currentUser) return;
-
-    if (!isPremiumActive(currentUserProfile)) {
-      setShowPremiumModal(true);
-      return;
-    }
 
     if (file.size > 5 * 1024 * 1024) {
       alert('A imagem deve ter no máximo 5MB.');
@@ -416,22 +409,16 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
           <button
             type="button"
             onClick={() => {
-              if (isPremiumActive(currentUserProfile)) {
-                fileInputRef.current?.click();
-              } else {
-                setShowPremiumModal(true);
-              }
+              fileInputRef.current?.click();
             }}
             disabled={isUploading}
-            className={`p-2.5 rounded-full transition-colors shrink-0 ${isPremiumActive(currentUserProfile) ? 'text-pink-500 hover:bg-pink-500/10' : 'text-zinc-600 hover:text-yellow-500'}`}
-            title={isPremiumActive(currentUserProfile) ? "Enviar Foto" : "Torne-se Premium para enviar fotos"}
+            className="p-2.5 rounded-full transition-colors shrink-0 text-pink-500 hover:bg-pink-500/10"
+            title="Enviar Foto"
           >
             {isUploading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
-            ) : isPremiumActive(currentUserProfile) ? (
-              <Camera className="w-5 h-5" />
             ) : (
-              <Crown className="w-5 h-5" />
+              <Camera className="w-5 h-5" />
             )}
           </button>
           <input
@@ -452,7 +439,6 @@ export default function ChatRoom({ chatId, onBack }: ChatRoomProps) {
           </button>
         </form>
       </div>
-      {showPremiumModal && <PremiumModal onClose={() => setShowPremiumModal(false)} />}
     </div>
   );
 }

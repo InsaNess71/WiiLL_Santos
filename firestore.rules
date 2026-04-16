@@ -19,12 +19,6 @@ service cloud.firestore {
         );
     }
 
-    function isPremium() {
-      let user = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-      return isAuthenticated() && 
-             (isAdmin() || (user.isPremium == true && (!('premiumUntil' in user) || user.premiumUntil > request.time)));
-    }
-
     function getJudgementVal(data, key) {
       return ('judgement' in data && key in data.judgement) ? data.judgement[key] : 0;
     }
@@ -36,7 +30,7 @@ service cloud.firestore {
              (!('age' in data) || (data.age is number && data.age >= 13 && data.age <= 120)) &&
              (!('gender' in data) || (data.gender is string && data.gender.size() <= 50)) &&
              (!('background' in data) || (data.background is string && data.background.size() <= 200)) &&
-             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 2000 && isPremium())) &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 2000)) &&
              (!('isHidden' in data) || data.isHidden is bool) &&
              data.likes is number &&
              data.commentCount is number &&
@@ -72,8 +66,6 @@ service cloud.firestore {
              (!('role' in data) || data.role in ['user', 'admin']) &&
              (!('isVerified' in data) || data.isVerified is bool) &&
              (!('isShadowBanned' in data) || data.isShadowBanned is bool) &&
-             (!('isPremium' in data) || data.isPremium is bool) &&
-             (!('premiumUntil' in data) || data.premiumUntil is timestamp) &&
              (!('lastActive' in data) || data.lastActive is timestamp) &&
              (!('isAnonymous' in data) || data.isAnonymous is bool) &&
              (!('karma' in data) || data.karma is number);
@@ -84,13 +76,12 @@ service cloud.firestore {
       allow create: if isOwner(userId) && isValidNickname(request.resource.data.nickname) &&
                     (!('role' in request.resource.data) || request.resource.data.role == 'user' || isAdmin()) &&
                     (!('isShadowBanned' in request.resource.data) || request.resource.data.isShadowBanned == false || isAdmin()) &&
-                    (!('isPremium' in request.resource.data) || request.resource.data.isPremium == false || isAdmin()) &&
                     (!('karma' in request.resource.data) || request.resource.data.karma == 0 || isAdmin());
       allow update: if (isOwner(userId) && 
-                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname', 'lastActive', 'gender', 'maritalStatus', 'bio', 'avatar', 'role', 'isVerified', 'isShadowBanned', 'isPremium', 'karma', 'premiumUntil']) &&
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname', 'lastActive', 'gender', 'maritalStatus', 'bio', 'avatar', 'role', 'isVerified', 'isShadowBanned', 'karma']) &&
                     isValidProfile(request.resource.data) &&
                     (
-                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isVerified', 'isShadowBanned', 'karma', 'isPremium', 'premiumUntil']) ||
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isVerified', 'isShadowBanned', 'karma']) ||
                       isAdmin()
                     )) || 
                     // Allow karma updates for others (likes/best comment)
@@ -134,7 +125,7 @@ service cloud.firestore {
                       get(/databases/$(database)/documents/chats/$(chatId)).data.expiresAt > request.time &&
                       request.resource.data.text is string &&
                       request.resource.data.text.size() <= 1000 &&
-                      (!('imageUrl' in request.resource.data) || (request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() <= 2000 && isPremium())) &&
+                      (!('imageUrl' in request.resource.data) || (request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() <= 2000)) &&
                       (request.resource.data.text.size() > 0 || 'imageUrl' in request.resource.data) &&
                       request.resource.data.senderId == request.auth.uid;
       }

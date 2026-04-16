@@ -8,14 +8,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { containsProfanity, filterProfanity } from '../lib/filter';
 import { moderateConfession } from '../services/geminiService';
 import { cn } from '../lib/utils';
-import PremiumModal from './PremiumModal';
 
 interface CreateConfessionProps {
   onClose: () => void;
-  isPremium: boolean;
 }
 
-export default function CreateConfession({ onClose, isPremium }: CreateConfessionProps) {
+export default function CreateConfession({ onClose }: CreateConfessionProps) {
   const [text, setText] = useState('');
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [age, setAge] = useState('');
@@ -25,7 +23,6 @@ export default function CreateConfession({ onClose, isPremium }: CreateConfessio
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [showPremiumModal, setShowPremiumModal] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const BACKGROUNDS = [
@@ -75,7 +72,7 @@ export default function CreateConfession({ onClose, isPremium }: CreateConfessio
         commentCount: 0,
         judgement: { right: 0, wrong: 0 },
         background,
-        imageUrl: isPremium ? imageUrl : '',
+        imageUrl: imageUrl || '',
         isHidden: isShadowBanned,
         createdAt: serverTimestamp(),
         authorId: auth.currentUser.uid
@@ -96,11 +93,6 @@ export default function CreateConfession({ onClose, isPremium }: CreateConfessio
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !auth.currentUser) return;
-
-    if (!isPremium) {
-      setShowPremiumModal(true);
-      return;
-    }
 
     if (!auth.currentUser) {
       setError('Você precisa estar logado para enviar fotos.');
@@ -267,78 +259,61 @@ export default function CreateConfession({ onClose, isPremium }: CreateConfessio
             <label className="block text-sm font-medium text-zinc-400 mb-2 flex items-center justify-between">
               <span className="flex items-center space-x-1.5">
                 <Camera className="w-4 h-4" />
-                <span>Imagem (Premium)</span>
+                <span>Imagem</span>
               </span>
-              {!isPremium && (
-                <span className="flex items-center space-x-1 text-[10px] bg-yellow-500/10 text-yellow-500 px-1.5 py-0.5 rounded uppercase font-bold">
-                  <Crown className="w-3 h-3" />
-                  <span>Bloqueado</span>
-                </span>
-              )}
             </label>
             
-            {isPremium ? (
-              <div className="space-y-3">
-                <input 
-                  type="file" 
-                  ref={fileInputRef}
-                  onChange={handleFileUpload}
-                  accept="image/*"
-                  className="hidden"
-                />
-                
-                {imageUrl ? (
-                  <div className="relative rounded-xl overflow-hidden border border-zinc-800 bg-black aspect-video">
-                    <img src={imageUrl} alt="Preview" className="w-full h-full object-contain" />
-                    <button
-                      type="button"
-                      onClick={() => setImageUrl('')}
-                      className="absolute top-2 right-2 p-1.5 bg-black/60 text-white rounded-full hover:bg-red-500 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+            <div className="space-y-3">
+              <input 
+                type="file" 
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                accept="image/*"
+                className="hidden"
+              />
+              
+              {imageUrl ? (
+                <div className="relative rounded-xl overflow-hidden border border-zinc-800 bg-black aspect-video">
+                  <img src={imageUrl} alt="Preview" className="w-full h-full object-contain" />
+                  <button
+                    type="button"
+                    onClick={() => setImageUrl('')}
+                    className="absolute top-2 right-2 p-1.5 bg-black/60 text-white rounded-full hover:bg-red-500 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : isUploading ? (
+                <div className="w-full py-8 bg-zinc-950 border border-zinc-800 rounded-xl flex flex-col items-center justify-center space-y-3">
+                  <Loader2 className="w-6 h-6 text-pink-500 animate-spin" />
+                  <div className="w-1/2 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-pink-600 transition-all duration-300" 
+                      style={{ width: `${uploadProgress}%` }}
+                    />
                   </div>
-                ) : isUploading ? (
-                  <div className="w-full py-8 bg-zinc-950 border border-zinc-800 rounded-xl flex flex-col items-center justify-center space-y-3">
-                    <Loader2 className="w-6 h-6 text-pink-500 animate-spin" />
-                    <div className="w-1/2 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-pink-600 transition-all duration-300" 
-                        style={{ width: `${uploadProgress}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-zinc-500">Enviando imagem... {Math.round(uploadProgress)}%</span>
-                  </div>
-                ) : (
-                  <div className="flex space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex-1 py-3 bg-zinc-950 border border-zinc-800 rounded-lg flex items-center justify-center space-x-2 text-zinc-300 hover:bg-zinc-800 transition-colors"
-                    >
-                      <Upload className="w-4 h-4" />
-                      <span className="text-sm">Enviar do Aparelho</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setImageUrl('https://picsum.photos/seed/' + Math.random() + '/800/600')}
-                      className="px-4 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-medium transition-colors"
-                    >
-                      Aleatória
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowPremiumModal(true)}
-                className="w-full py-4 bg-zinc-950 border-2 border-dashed border-zinc-800 rounded-xl flex flex-col items-center justify-center space-y-2 text-zinc-500 hover:border-zinc-700 hover:text-zinc-400 transition-all group"
-              >
-                <Camera className="w-6 h-6 group-hover:scale-110 transition-transform" />
-                <span className="text-xs font-medium">Torne-se Premium para postar fotos</span>
-              </button>
-            )}
+                  <span className="text-xs text-zinc-500">Enviando imagem... {Math.round(uploadProgress)}%</span>
+                </div>
+              ) : (
+                <div className="flex space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex-1 py-3 bg-zinc-950 border border-zinc-800 rounded-lg flex items-center justify-center space-x-2 text-zinc-300 hover:bg-zinc-800 transition-colors"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span className="text-sm">Enviar do Aparelho</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImageUrl('https://picsum.photos/seed/' + Math.random() + '/800/600')}
+                    className="px-4 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-medium transition-colors"
+                  >
+                    Aleatória
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="pt-4 flex justify-end">
@@ -353,7 +328,6 @@ export default function CreateConfession({ onClose, isPremium }: CreateConfessio
           </div>
         </form>
       </motion.div>
-      {showPremiumModal && <PremiumModal onClose={() => setShowPremiumModal(false)} />}
     </div>
   );
 }
