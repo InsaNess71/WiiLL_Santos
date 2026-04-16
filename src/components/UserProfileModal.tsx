@@ -451,8 +451,15 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
                             });
                             
                             if (!response.ok) {
-                              const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido no servidor' }));
-                              throw new Error(errorData.error || `Erro ${response.status}`);
+                              const text = await response.text();
+                              let errorMsg = `Erro ${response.status}`;
+                              try {
+                                const errorData = JSON.parse(text);
+                                errorMsg = errorData.error || errorMsg;
+                              } catch (e) {
+                                errorMsg = text || errorMsg;
+                              }
+                              throw new Error(errorMsg);
                             }
 
                             const data = await response.json();

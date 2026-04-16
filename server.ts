@@ -185,7 +185,7 @@ async function startServer() {
 
       console.log(`API_CALL: create-checkout-session - Sanitized Origin: ${origin}, User: ${userId}`);
       
-      const session = await stripe.checkout.sessions.create({
+      const sessionOptions: Stripe.Checkout.SessionCreateParams = {
         payment_method_types: ["card", "boleto"],
         payment_method_options: {
           boleto: {
@@ -207,7 +207,10 @@ async function startServer() {
         success_url: `${origin}/?payment=success`,
         cancel_url: `${origin}/?payment=cancel`,
         metadata: { userId },
-      });
+      };
+
+      console.log("API_CALL: create-checkout-session - Creating session with options:", JSON.stringify(sessionOptions, null, 2));
+      const session = await stripe.checkout.sessions.create(sessionOptions);
 
       console.log(`API_CALL: create-checkout-session - SUCCESS: ${session.id}`);
       res.json({ id: session.id, url: session.url });
