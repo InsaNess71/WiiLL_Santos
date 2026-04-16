@@ -23,8 +23,10 @@ function getStripe() {
 
 // Firebase Initialization (Safe)
 let db: any;
+let messaging: admin.messaging.Messaging | null = null;
+
 function initFirebase() {
-  if (db) return db;
+  if (db) return { db, messaging };
   try {
     const configPath = fs.existsSync(path.join(__dirname, "firebase-applet-config.json"))
       ? path.join(__dirname, "firebase-applet-config.json")
@@ -35,11 +37,47 @@ function initFirebase() {
       admin.initializeApp({ projectId: firebaseConfig.projectId });
     }
     db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId);
+    messaging = admin.messaging();
     console.log("FIREBASE: Initialized successfully");
-    return db;
+    return { db, messaging };
   } catch (e) {
     console.error("FIREBASE: Initialization failed", e);
-    return null;
+    return { db: null, messaging: null };
+  }
+}
+
+async function sendNotification(userId: string, title: string, body: string, data: any = {}) {
+  const { db, messaging } = initFirebase();
+  if (!db || !messaging) return;
+
+  try {
+    const tokenDoc = await db.collection("users").doc(userId).collection("private").doc("data").get();
+    if (!tokenDoc.exists) return;
+
+    const fcmToken = tokenDoc.data()?.fcmToken;
+    if (!fcmToken) return;
+
+    await messaging.send({
+      token: fcmToken,
+      notification: { title, body },
+      data: {
+        ...data,
+        click_action: "FLUTTER_NOTIFICATION_CLICK", // Standard for some clients
+      },
+      webpush: {
+        notification: {
+          icon: "/icon-192.png",
+          badge: "/icon-192.png",
+          vibrate: [200, 100, 200],
+        },
+        fcmOptions: {
+          link: "/",
+        }
+      }
+    });
+    console.log(`FCM: Notification sent to user ${userId}`);
+  } catch (err) {
+    console.error(`FCM ERROR: Failed to send to ${userId}`, err);
   }
 }
 
@@ -75,9 +113,9 @@ async function startServer() {
         
         if (userId) {
           console.log(`WEBHOOK: Payment success for user ${userId}`);
-          const firestore = initFirebase();
-          if (firestore) {
-            const userRef = firestore.collection("users").doc(userId);
+          const { db } = initFirebase();
+          if (db) {
+            const userRef = db.collection("users").doc(userId);
             const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
             const userDoc = await userRef.get();
             
@@ -115,6 +153,7 @@ async function startServer() {
   const apiRouter = express.Router();
 
   apiRouter.get("/health", (req, res) => {
+    const { db } = initFirebase();
     res.json({ 
       status: "ok", 
       timestamp: new Date().toISOString(), 
@@ -180,11 +219,11 @@ async function startServer() {
       return res.status(400).json({ error: "Campos obrigatórios faltando." });
     }
 
-    const firestore = initFirebase();
-    if (!firestore) return res.status(500).json({ error: "Database not initialized" });
+    const { db } = initFirebase();
+    if (!db) return res.status(500).json({ error: "Database not initialized" });
 
     try {
-      const chatRef = firestore.collection("chats").doc(chatId);
+      const chatRef = db.collection("chats").doc(chatId);
       const chatDoc = await chatRef.get();
       if (!chatDoc.exists) return res.status(404).json({ error: "Chat não encontrado." });
 
@@ -195,7 +234,7 @@ async function startServer() {
       const messageRef = chatRef.collection("messages").doc();
       const now = admin.firestore.FieldValue.serverTimestamp();
 
-      await firestore.runTransaction(async (transaction: any) => {
+      await db.runTransaction(async (transaction: any) => {
         transaction.set(messageRef, { 
           senderId, 
           text: text || "", 
@@ -210,10 +249,35 @@ async function startServer() {
         });
       });
 
+      // Send Push Notification
+      const senderDoc = await db.collection("users").doc(senderId).get();
+      const senderName = senderDoc.exists ? senderDoc.data()?.nickname : "Alguém";
+      
+      sendNotification(
+        recipientId, 
+        `Mensagem de ${senderName}`, 
+        text || "Enviou uma foto para você.",
+        { chatId, type: "chat" }
+      );
+
       console.log(`API_CALL: send-chat-message - SUCCESS: ${messageRef.id}`);
       res.json({ success: true, messageId: messageRef.id });
     } catch (error: any) {
       console.error("API_CALL: send-chat-message - ERROR:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  apiRouter.post("/notify", async (req, res) => {
+    const { userId, title, body, data } = req.body;
+    if (!userId || !title || !body) {
+      return res.status(400).json({ error: "Campos obrigatórios faltando." });
+    }
+
+    try {
+      await sendNotification(userId, title, body, data);
+      res.json({ success: true });
+    } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });

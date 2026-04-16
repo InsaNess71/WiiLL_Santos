@@ -526,6 +526,24 @@ export default function CommentSection({ confessionId, confessionText, confessio
       await batch.commit();
       setNewComment('');
 
+      // Send Push Notification to confession author
+      if (auth.currentUser.uid !== confessionAuthorId) {
+        try {
+          await fetch('/api/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: confessionAuthorId,
+              title: 'Novo Comentário',
+              body: `Alguém comentou na sua confissão: "${filteredText.slice(0, 50)}..."`,
+              data: { confessionId, type: 'comment' }
+            })
+          });
+        } catch (err) {
+          console.error("Erro ao enviar notificação de comentário:", err);
+        }
+      }
+
       // If user mentioned @Conselheiro, trigger AI response
       if (isAskingAI) {
         setIsAILoading(true);

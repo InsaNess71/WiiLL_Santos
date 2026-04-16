@@ -112,6 +112,24 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
         batch.update(confessionRef, { likes: increment(1) });
         setIsLiked(true);
         await batch.commit();
+
+        // Check if trending (reaching 10 likes)
+        if (confession.likes === 9) {
+          try {
+            await fetch('/api/notify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: confession.authorId,
+                title: '🔥 Sua confissão está bombando!',
+                body: 'Sua confissão atingiu 10 curtidas e agora está em alta!',
+                data: { confessionId: confession.id, type: 'trending' }
+              })
+            });
+          } catch (err) {
+            console.error("Erro ao enviar notificação de trending:", err);
+          }
+        }
       }
     } catch (error) {
       console.error("Error toggling like:", error);

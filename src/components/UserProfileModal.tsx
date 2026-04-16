@@ -571,6 +571,20 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
                       <span className="text-sm font-medium">Política de Privacidade</span>
                     </div>
                   </button>
+                  {(isAdmin || auth.currentUser?.email === 'wiillsantos16@gmail.com') && (
+                    <button 
+                      onClick={() => {
+                        onClose();
+                        window.dispatchEvent(new CustomEvent('openAdminDashboard'));
+                      }}
+                      className="w-full flex items-center justify-between p-3 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors text-red-400"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <ShieldCheck className="w-5 h-5" />
+                        <span className="text-sm font-medium">Painel de Administração</span>
+                      </div>
+                    </button>
+                  )}
                   <button 
                     onClick={() => {
                       onClose();

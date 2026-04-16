@@ -36,11 +36,19 @@ export default function App() {
   const [needsNickname, setNeedsNickname] = useState(false);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [totalUnread, setTotalUnread] = useState(0);
-  const [toast, setToast] = useState<{id: number, title: string, message: string} | null>(null);
+  const [toast, setToast] = useState<{id: number, title: string, message: string, data?: any} | null>(null);
   
   const prevUnreadMap = useRef<Record<string, number>>({});
   const isInitialLoad = useRef(true);
   const viewingState = useRef({ showChats: false, activeChatId: null as string | null });
+
+  // Auto-hide toast
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
   
   const [sortBy, setSortBy] = useState<SortOption>('recent');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -172,11 +180,16 @@ export default function App() {
     const handleRequestSignIn = () => {
       signInWithGoogle();
     };
+    const handleOpenAdmin = () => {
+      setShowAdminDashboard(true);
+    };
     window.addEventListener('openChat', handleOpenChat);
     window.addEventListener('requestGoogleSignIn', handleRequestSignIn);
+    window.addEventListener('openAdminDashboard', handleOpenAdmin);
     return () => {
       window.removeEventListener('openChat', handleOpenChat);
       window.removeEventListener('requestGoogleSignIn', handleRequestSignIn);
+      window.removeEventListener('openAdminDashboard', handleOpenAdmin);
     };
   }, []);
 
@@ -256,7 +269,8 @@ export default function App() {
           setToast({ 
             id: Date.now(), 
             title: payload.notification?.title || 'Nova Notificação', 
-            message: payload.notification?.body || 'Você tem uma nova mensagem.' 
+            message: payload.notification?.body || 'Você tem uma nova mensagem.',
+            data: payload.data
           });
           playNotificationSound();
         });
@@ -584,7 +598,7 @@ export default function App() {
                   >
                     <User className="w-5 h-5" />
                   </button>
-                  {currentUserProfile?.role === 'admin' && (
+                  {(currentUserProfile?.role === 'admin' || user?.email === 'wiillsantos16@gmail.com') && (
                     <button 
                       onClick={() => setShowAdminDashboard(true)}
                       className="p-2 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/20 transition-colors"
@@ -754,8 +768,16 @@ export default function App() {
               exit={{ opacity: 0, y: -50, x: '-50%' }}
               className="fixed top-20 left-1/2 z-[100] bg-zinc-800 border border-pink-500/50 shadow-2xl rounded-xl p-4 w-[90%] max-w-sm cursor-pointer"
               onClick={() => {
+                const data = toast.data;
                 setToast(null);
-                setShowChats(true);
+                if (data?.chatId) {
+                  setActiveChatId(data.chatId);
+                  setShowChats(true);
+                } else if (data?.confessionId) {
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                  setShowChats(true);
+                }
               }}
             >
               <div className="flex items-start space-x-3">

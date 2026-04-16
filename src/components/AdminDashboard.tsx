@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ShieldAlert, Trash2, UserX, CheckCircle, AlertTriangle, Ghost } from 'lucide-react';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { X, ShieldAlert, Trash2, UserX, CheckCircle, AlertTriangle, Ghost, Bell } from 'lucide-react';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -249,7 +249,72 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
         </div>
 
         <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-zinc-950/50">
-          {loading ? (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 shadow-lg mb-6">
+              <h3 className="text-sm font-bold text-zinc-100 mb-3 flex items-center space-x-2">
+                <Bell className="w-4 h-4 text-pink-500" />
+                <span>Testar Notificações Push</span>
+              </h3>
+              <div className="mb-4 p-3 bg-zinc-950 rounded-lg border border-zinc-800/50">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-zinc-400">Status de Permissão:</span>
+                  <span className={`text-xs font-bold ${
+                    typeof window !== 'undefined' && 'Notification' in window 
+                      ? Notification.permission === 'granted' ? 'text-green-500' : Notification.permission === 'denied' ? 'text-red-500' : 'text-yellow-500'
+                      : 'text-zinc-500'
+                  }`}>
+                    {typeof window !== 'undefined' && 'Notification' in window 
+                      ? Notification.permission === 'granted' ? 'Ativado' : Notification.permission === 'denied' ? 'Bloqueado' : 'Pendente'
+                      : 'Não suportado'}
+                  </span>
+                </div>
+                {typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted' && (
+                  <button
+                    onClick={async () => {
+                      const permission = await Notification.requestPermission();
+                      if (permission === 'granted') {
+                        alert("Permissão concedida! Agora você pode receber notificações.");
+                        window.location.reload();
+                      } else {
+                        alert("Permissão negada. Você precisa ativar nas configurações do navegador.");
+                      }
+                    }}
+                    className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-medium transition-colors border border-zinc-700"
+                  >
+                    Solicitar Permissão
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-zinc-400 mb-4">Envie uma notificação de teste para você mesmo para verificar se o sistema está funcionando.</p>
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/notify', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        userId: auth.currentUser?.uid,
+                        title: '🔔 Teste de Notificação',
+                        body: 'Se você está vendo isso, as notificações push estão funcionando perfeitamente!',
+                        data: { type: 'test' }
+                      })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      alert("Notificação enviada com sucesso! Verifique seu dispositivo.");
+                    } else {
+                      alert("Erro ao enviar: " + data.error);
+                    }
+                  } catch (err: any) {
+                    alert("Erro na requisição: " + err.message);
+                  }
+                }}
+                className="w-full py-2.5 bg-pink-600/10 hover:bg-pink-600/20 text-pink-500 border border-pink-500/20 rounded-xl text-xs font-bold transition-all"
+              >
+                Enviar Notificação de Teste
+              </button>
+            </div>
+
+            {loading ? (
             <div className="flex flex-col items-center justify-center py-12">
               <div className="w-8 h-8 border-4 border-pink-500/30 border-t-pink-500 rounded-full animate-spin mb-4"></div>
               <p className="text-zinc-400">Buscando denúncias...</p>
