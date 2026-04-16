@@ -149,8 +149,9 @@ async function startServer() {
   // 3. Body Parsers
   app.use(express.json());
 
-  // 4. API Routes (Defined directly on app for maximum reliability)
+  // 4. API Routes (Mounted early for reliability)
   const apiRouter = express.Router();
+  app.use("/api", apiRouter);
 
   apiRouter.get("/health", (req, res) => {
     const { db } = initFirebase();
@@ -296,8 +297,6 @@ async function startServer() {
     res.status(404).json({ error: "API Route not found", method: req.method, path: req.url });
   });
 
-  app.use("/api", apiRouter);
-
   // 5. Static Files & SPA Fallback
   const rootDir = process.cwd();
   
@@ -343,14 +342,20 @@ async function startServer() {
         return res.status(404).json({ error: `API route not found: ${req.url}` });
       }
       
-      // 2. For everything else, try to serve index.html
-      // This is the heart of SPA routing
-      if (fs.existsSync(indexPath)) {
-        return res.sendFile(indexPath);
-      } else {
-        console.error(`SERVER ERROR: index.html not found at ${indexPath}`);
-        return res.status(404).send("Página não encontrada. Por favor, recarregue o site.");
-      }
+      // 2. For everything else, serve index.html
+      // We use the absolute path resolved at startup
+      res.sendFile(indexPath, (err) => {
+        if (err) {
+          console.error(`SERVER ERROR: Failed to send index.html from ${indexPath}:`, err);
+          // Fallback check
+          const fallbackIndex = path.join(process.cwd(), "dist", "index.html");
+          if (fs.existsSync(fallbackIndex)) {
+            res.sendFile(fallbackIndex);
+          } else {
+            res.status(404).send("Página não encontrada. Por favor, recarregue o site.");
+          }
+        }
+      });
     });
   } else {
     console.log("SERVER: No dist folder found. Falling back to Vite middleware (Development Mode)");
