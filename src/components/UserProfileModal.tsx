@@ -427,13 +427,22 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
                           setError('');
                           setCheckoutUrl(null);
                           
-                          // 1. Try to open a blank window immediately
-                          const paymentWindow = window.open('', '_blank');
+                          // 1. Try to open a blank window immediately to avoid popup blocker
+                          const paymentWindow = window.open('about:blank', '_blank');
                           if (paymentWindow) {
-                            paymentWindow.document.write('<p style="font-family:sans-serif;text-align:center;margin-top:50px;">Carregando checkout seguro...</p>');
+                            paymentWindow.document.write(`
+                              <html>
+                                <head><title>Carregando Pagamento...</title></head>
+                                <body style="background:#09090b;color:#a1a1aa;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;">
+                                  <div style="width:40px;height:40px;border:3px solid #3f3f46;border-top-color:#db2777;border-radius:50%;animation:spin 1s linear infinite;"></div>
+                                  <p style="margin-top:20px;font-weight:bold;">Preparando seu checkout seguro...</p>
+                                  <p style="font-size:12px;color:#71717a;">Você será redirecionado em instantes.</p>
+                                  <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+                                </body>
+                              </html>
+                            `);
                           }
                           
-                          console.log("Iniciando checkout session...");
                           try {
                             const response = await fetch('/api/create-checkout-session', {
                               method: 'POST',
@@ -442,16 +451,17 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
                             });
                             
                             if (!response.ok) {
-                              const text = await response.text();
-                              throw new Error(`Erro no servidor: ${text}`);
+                              const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido no servidor' }));
+                              throw new Error(errorData.error || `Erro ${response.status}`);
                             }
 
                             const data = await response.json();
                             if (data.url) {
                               setCheckoutUrl(data.url);
-                              if (paymentWindow) {
+                              if (paymentWindow && !paymentWindow.closed) {
                                 paymentWindow.location.href = data.url;
                               } else {
+                                // Fallback: if popup was blocked or closed, try top-level redirect or just show the link
                                 try {
                                   window.top!.location.href = data.url;
                                 } catch (e) {
@@ -459,12 +469,12 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
                                 }
                               }
                             } else {
-                              throw new Error(data.error || 'Erro ao criar sessão');
+                              throw new Error('URL de checkout não recebida');
                             }
                           } catch (err: any) {
-                            console.error(err);
+                            console.error("Erro no Checkout:", err);
                             if (paymentWindow) paymentWindow.close();
-                            setError(err.message || 'Erro ao iniciar pagamento.');
+                            setError(`Não foi possível iniciar o pagamento: ${err.message}`);
                             setIsProcessingPayment(false);
                           }
                         }}

@@ -177,8 +177,13 @@ async function startServer() {
 
     try {
       const stripe = getStripe();
-      const origin = req.headers.origin || process.env.VITE_APP_URL || "http://localhost:3000";
-      console.log(`API_CALL: create-checkout-session - Origin: ${origin}, User: ${userId}`);
+      let origin = req.headers.origin || process.env.VITE_APP_URL || "http://localhost:3000";
+      
+      // Sanitize origin: remove trailing slash and ensure it's a valid URL
+      origin = origin.replace(/\/$/, "");
+      if (!origin.startsWith('http')) origin = `https://${origin}`;
+
+      console.log(`API_CALL: create-checkout-session - Sanitized Origin: ${origin}, User: ${userId}`);
       
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card", "boleto"],
@@ -199,8 +204,8 @@ async function startServer() {
           quantity: 1,
         }],
         mode: "payment",
-        success_url: `${origin}?payment=success`,
-        cancel_url: `${origin}?payment=cancel`,
+        success_url: `${origin}/?payment=success`,
+        cancel_url: `${origin}/?payment=cancel`,
         metadata: { userId },
       });
 
