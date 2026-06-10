@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Ghost, Bot, Sparkles, Trophy, Flame, Clock, MessageSquare, ChevronRight, Check } from 'lucide-react';
+import { Ghost, Trophy, Flame, Clock, MessageSquare, ChevronRight, Check } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface OnboardingProps {
@@ -18,19 +18,9 @@ const STEPS = [
     borderColor: 'border-pink-500/20'
   },
   {
-    id: 'ia',
-    title: 'Conselheiro Virtual',
-    description: 'Nunca esteja sozinho. Precisa de um conselho agora? Nossa IA está pronta para te ouvir e dar uma perspectiva diferente.',
-    icon: Bot,
-    extraIcon: Sparkles,
-    color: 'text-indigo-400',
-    bgColor: 'bg-indigo-500/10',
-    borderColor: 'border-indigo-500/20'
-  },
-  {
     id: 'karma',
     title: 'Sua voz tem valor',
-    description: 'Reaja às confissões, julgue o que é certo ou errado e ganhe Karma por ajudar a comunidade com bons conselhos.',
+    description: 'Reaja às confissões, julgue o que é certo ou errado e ganhe Karma por ajudar a comunidade com suas interações.',
     icon: Trophy,
     extraIcon: Flame,
     color: 'text-yellow-500',
@@ -70,7 +60,6 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       <div className={cn(
         "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] blur-[120px] rounded-full transition-colors duration-700 opacity-20",
         step.id === 'anonimato' && "bg-pink-500",
-        step.id === 'ia' && "bg-indigo-500",
         step.id === 'karma' && "bg-yellow-500",
         step.id === 'chats' && "bg-cyan-500"
       )} />

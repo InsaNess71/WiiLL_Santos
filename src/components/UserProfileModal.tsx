@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { X, MessageSquare, User, Edit2, Save, FileText, Shield, LogOut, Trash2, ShieldCheck, Crown } from 'lucide-react';
+import { X, MessageSquare, User, Edit2, Save, FileText, Shield, LogOut, Trash2, ShieldCheck } from 'lucide-react';
 import { db, auth, logOut, handleFirestoreError, OperationType } from '../firebase';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { Confession, UserProfile, AVATARS, ADMIN_AVATAR } from '../types';
@@ -9,6 +9,8 @@ import { ptBR } from 'date-fns/locale';
 import PrivacyPolicy from './PrivacyPolicy';
 import TermsOfUse from './TermsOfUse';
 import { getUserProfile, updateUserCache } from '../lib/userCache';
+
+const ConfessionCard = React.lazy(() => import('./ConfessionCard'));
 
 interface UserProfileModalProps {
   userId: string;
@@ -401,17 +403,11 @@ export default function UserProfileModal({ userId, onClose }: UserProfileModalPr
                 <div className="text-center py-8 text-zinc-500">Nenhuma confissão ainda.</div>
               ) : (
                 <div className="space-y-4 mb-8">
-                  {confessions.map(conf => (
-                    <div key={conf.id} className="bg-zinc-950 p-4 rounded-xl border border-zinc-800/50">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium text-pink-500">{conf.category}</span>
-                        <span className="text-xs text-zinc-600">
-                          {conf.createdAt?.toDate ? formatDistanceToNow(conf.createdAt.toDate(), { addSuffix: true, locale: ptBR }) : 'agora'}
-                        </span>
-                      </div>
-                      <p className="text-sm text-zinc-300">"{conf.text}"</p>
-                    </div>
-                  ))}
+                  <React.Suspense fallback={<div className="text-center py-4 text-zinc-500">Carregando confissões...</div>}>
+                    {confessions.map(conf => (
+                      <ConfessionCard key={conf.id} confession={conf} />
+                    ))}
+                  </React.Suspense>
                 </div>
               )}
 

@@ -107,7 +107,7 @@ async function startServer() {
   });
 
   // 3. Body Parsers
-  app.use(express.json());
+  app.use(express.json({ limit: '20mb' }));
 
   // 4. API Routes (Mounted early for reliability)
   const apiRouter = express.Router();
@@ -124,8 +124,8 @@ async function startServer() {
 
   apiRouter.post("/send-chat-message", async (req, res) => {
     console.log("API_CALL: send-chat-message - START");
-    const { chatId, text, senderId, imageUrl } = req.body;
-    if (!chatId || !senderId || (!text && !imageUrl)) {
+    const { chatId, text, senderId } = req.body;
+    if (!chatId || !senderId || !text) {
       return res.status(400).json({ error: "Campos obrigatórios faltando." });
     }
 
@@ -135,29 +135,62 @@ async function startServer() {
     try {
       const chatRef = db.collection("chats").doc(chatId);
       const chatDoc = await chatRef.get();
-      if (!chatDoc.exists) return res.status(404).json({ error: "Chat não encontrado." });
+      
+      let recipientId: string;
+      let isNewChat = false;
 
-      const chatData = chatDoc.data();
-      const recipientId = chatData?.participants?.find((id: string) => id !== senderId);
-      if (!recipientId) return res.status(400).json({ error: "Destinatário não encontrado." });
+      if (!chatDoc.exists) {
+        const uids = chatId.split('_');
+        recipientId = uids.find((id: string) => id !== senderId) || "";
+        if (!recipientId) return res.status(400).json({ error: "Participantes inválidos no ID do chat." });
+        isNewChat = true;
+      } else {
+        const chatData = chatDoc.data();
+        recipientId = chatData?.participants?.find((id: string) => id !== senderId);
+        if (!recipientId) return res.status(400).json({ error: "Destinatário não encontrado." });
+      }
 
       const messageRef = chatRef.collection("messages").doc();
       const now = admin.firestore.FieldValue.serverTimestamp();
 
-      await db.runTransaction(async (transaction: any) => {
-        transaction.set(messageRef, { 
-          senderId, 
-          text: text || "", 
-          imageUrl: imageUrl || null, 
-          createdAt: now, 
-          isSystem: false 
+      if (isNewChat) {
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 24);
+        
+        await db.runTransaction(async (transaction: any) => {
+          transaction.set(chatRef, {
+            participants: [senderId, recipientId],
+            durationMode: '24h',
+            expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+            updatedAt: now,
+            lastMessage: text,
+            unreadCount: {
+              [senderId]: 0,
+              [recipientId]: 1
+            }
+          });
+          transaction.set(messageRef, { 
+            senderId, 
+            text: text || "", 
+            createdAt: now, 
+            isSystem: false 
+          });
         });
-        transaction.update(chatRef, {
-          lastMessage: text || "📷 Foto",
-          updatedAt: now,
-          [`unreadCount.${recipientId}`]: admin.firestore.FieldValue.increment(1)
+      } else {
+        await db.runTransaction(async (transaction: any) => {
+          transaction.set(messageRef, { 
+            senderId, 
+            text: text || "", 
+            createdAt: now, 
+            isSystem: false 
+          });
+          transaction.update(chatRef, {
+            lastMessage: text,
+            updatedAt: now,
+            [`unreadCount.${recipientId}`]: admin.firestore.FieldValue.increment(1)
+          });
         });
-      });
+      }
 
       // Send Push Notification
       const senderDoc = await db.collection("users").doc(senderId).get();
@@ -166,7 +199,7 @@ async function startServer() {
       sendNotification(
         recipientId, 
         `Mensagem de ${senderName}`, 
-        text || "Enviou uma foto para você.",
+        text,
         { chatId, type: "chat" }
       );
 
@@ -199,67 +232,11 @@ async function startServer() {
   });
 
   // 5. Static Files & SPA Fallback
+  const isProduction = process.env.NODE_ENV === "production";
   const rootDir = process.cwd();
-  
-  // Resolve paths absolutely to avoid any ambiguity
-  const possibleDistPaths = [
-    path.resolve(rootDir, "dist"),
-    path.resolve(__dirname, "dist"),
-    path.resolve(__dirname, "..", "dist"),
-    path.join(rootDir, "dist")
-  ];
 
-  let distPath = "";
-  let indexPath = "";
-  let distExists = false;
-
-  for (const p of possibleDistPaths) {
-    const i = path.join(p, "index.html");
-    if (fs.existsSync(p) && fs.existsSync(i)) {
-      distPath = p;
-      indexPath = i;
-      distExists = true;
-      break;
-    }
-  }
-
-  console.log(`SERVER: Final distPath resolved to: ${distPath}`);
-  console.log(`SERVER: Final indexPath resolved to: ${indexPath}`);
-
-  if (distExists) {
-    console.log(`SERVER: Serving static files from ${distPath}`);
-    
-    // Serve static files first
-    app.use(express.static(distPath, {
-      maxAge: '1h', // Lowered for testing
-      etag: true,
-      index: false // We handle index manually below
-    }));
-    
-    // Catch-all for SPA
-    app.get("*", (req, res) => {
-      // 1. API routes must return 404 JSON if not handled
-      if (req.url.startsWith("/api/")) {
-        return res.status(404).json({ error: `API route not found: ${req.url}` });
-      }
-      
-      // 2. For everything else, serve index.html
-      // We use the absolute path resolved at startup
-      res.sendFile(indexPath, (err) => {
-        if (err) {
-          console.error(`SERVER ERROR: Failed to send index.html from ${indexPath}:`, err);
-          // Fallback check
-          const fallbackIndex = path.join(process.cwd(), "dist", "index.html");
-          if (fs.existsSync(fallbackIndex)) {
-            res.sendFile(fallbackIndex);
-          } else {
-            res.status(404).send("Página não encontrada. Por favor, recarregue o site.");
-          }
-        }
-      });
-    });
-  } else {
-    console.log("SERVER: No dist folder found. Falling back to Vite middleware (Development Mode)");
+  if (!isProduction) {
+    console.log("SERVER: Running in DEVELOPMENT mode. Using Vite middleware.");
     try {
       const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
@@ -271,6 +248,59 @@ async function startServer() {
       console.error("SERVER ERROR: Failed to start Vite middleware", e);
       app.get("*", (req, res) => {
         res.status(500).send("Server is initializing or misconfigured. Please try again in a moment.");
+      });
+    }
+  } else {
+    console.log("SERVER: Running in PRODUCTION mode. Serving static files.");
+    
+    // Resolve paths absolutely to avoid any ambiguity
+    const possibleDistPaths = [
+      path.resolve(rootDir, "dist"),
+      path.resolve(__dirname, "dist"),
+      path.resolve(__dirname, "..", "dist"),
+    ];
+
+    let distPath = "";
+    let indexPath = "";
+    let distExists = false;
+
+    for (const p of possibleDistPaths) {
+      const i = path.join(p, "index.html");
+      if (fs.existsSync(p) && fs.existsSync(i)) {
+        distPath = p;
+        indexPath = i;
+        distExists = true;
+        break;
+      }
+    }
+
+    if (distExists) {
+      console.log(`SERVER: Serving static files from ${distPath}`);
+      
+      // Serve static files first
+      app.use(express.static(distPath, {
+        maxAge: '1d',
+        etag: true,
+        index: false
+      }));
+      
+      // Catch-all for SPA
+      app.get("*", (req, res) => {
+        if (req.url.startsWith("/api/")) {
+          return res.status(404).json({ error: `API route not found: ${req.url}` });
+        }
+        
+        res.sendFile(indexPath, (err) => {
+          if (err) {
+            console.error(`SERVER ERROR: Failed to send index.html from ${indexPath}:`, err);
+            res.status(404).send("Página não encontrada. Por favor, recarregue o site.");
+          }
+        });
+      });
+    } else {
+      console.error("SERVER ERROR: Production mode enabled but dist folder not found!");
+      app.get("*", (req, res) => {
+        res.status(500).send("Build artifacts not found. Please run 'npm run build' first.");
       });
     }
   }

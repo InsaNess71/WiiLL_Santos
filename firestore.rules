@@ -30,7 +30,6 @@ service cloud.firestore {
              (!('age' in data) || (data.age is number && data.age >= 13 && data.age <= 120)) &&
              (!('gender' in data) || (data.gender is string && data.gender.size() <= 50)) &&
              (!('background' in data) || (data.background is string && data.background.size() <= 200)) &&
-             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 2000)) &&
              (!('isHidden' in data) || data.isHidden is bool) &&
              data.likes is number &&
              data.commentCount is number &&
@@ -46,7 +45,6 @@ service cloud.firestore {
       return data.confessionId is string &&
              data.text is string && data.text.size() > 0 && data.text.size() <= 2000 &&
              (!('likes' in data) || data.likes is number) &&
-             (!('isAI' in data) || data.isAI is bool) &&
              (!('isHidden' in data) || data.isHidden is bool) &&
              data.createdAt is timestamp &&
              data.authorId is string && data.authorId == request.auth.uid;
@@ -54,7 +52,7 @@ service cloud.firestore {
 
     function isValidNickname(nickname) {
       return nickname is string && nickname.size() >= 3 && nickname.size() <= 20 &&
-             !nickname.lower().matches('.*(porno|sexo|puta|caralho|buceta|pau|cu|foda).*');
+             !nickname.lower().matches('.*(porno|sexo|puta|caralho|buceta|pau|cu|foda|conselheiro|counselor).*');
     }
 
     function isValidProfile(data) {
@@ -97,37 +95,10 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      allow get: if isAuthenticated() && (resource == null || request.auth.uid in resource.data.participants);
-      allow list: if isAuthenticated() && request.auth.uid in resource.data.participants;
-      allow create: if isAuthenticated() &&
-                    request.auth.uid in request.resource.data.participants &&
-                    request.resource.data.participants is list &&
-                    request.resource.data.participants.size() == 2 &&
-                    request.resource.data.durationMode in ['1h', '24h'] &&
-                    request.resource.data.expiresAt is timestamp &&
-                    request.resource.data.expiresAt > request.time;
-      allow update: if isAuthenticated() && 
-                    request.auth.uid in resource.data.participants &&
-                    request.resource.data.participants == resource.data.participants &&
-                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt', 'lastMessage', 'unreadCount', 'durationMode', 'expiresAt']) &&
-                    (
-                      // Allow resetting unread count even if expired
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadCount']) ||
-                      // Other updates only if not expired
-                      (resource.data.expiresAt != null && resource.data.expiresAt > request.time)
-                    );
+      allow read, write: if isAuthenticated();
 
       match /messages/{messageId} {
-        allow read: if isAuthenticated() && 
-                    get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]);
-        allow create: if isAuthenticated() &&
-                      get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]) &&
-                      get(/databases/$(database)/documents/chats/$(chatId)).data.expiresAt > request.time &&
-                      request.resource.data.text is string &&
-                      request.resource.data.text.size() <= 1000 &&
-                      (!('imageUrl' in request.resource.data) || (request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() <= 2000)) &&
-                      (request.resource.data.text.size() > 0 || 'imageUrl' in request.resource.data) &&
-                      request.resource.data.senderId == request.auth.uid;
+        allow read, write: if isAuthenticated();
       }
     }
 

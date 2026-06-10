@@ -18,34 +18,47 @@ const ChatList = memo(function ChatList({ activeChatId, setActiveChatId }: ChatL
   const userCache = useRef<Record<string, UserProfile>>({});
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser) {
+      console.log("[ChatList] currentUser is null, skipping query");
+      return;
+    }
 
+    console.log(`[ChatList] Setting up chat listener for user UID: ${auth.currentUser.uid}`);
+    
     const q = query(
       collection(db, 'chats'),
       where('participants', 'array-contains', auth.currentUser.uid)
     );
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
+      console.log(`[ChatList] onSnapshot triggered. Documents found: ${snapshot.docs.length}`);
       const now = new Date();
       const chatPromises = snapshot.docs.map(async (docSnap) => {
-        const data = docSnap.data() as Chat;
+        const data = docSnap.data({ serverTimestamps: 'estimate' }) as Chat;
         const chat = { id: docSnap.id, ...data };
+        console.log(`[ChatList] Processing chat ID: ${chat.id}`, chat);
         
         // Filter out expired chats locally
         if (chat.expiresAt?.toDate && chat.expiresAt.toDate() < now) {
+          console.log(`[ChatList] Chat ID: ${chat.id} is expired. Ignoring.`);
           return null;
         }
 
         const otherUserId = chat.participants.find(id => id !== auth.currentUser?.uid);
         if (otherUserId) {
+          console.log(`[ChatList] Chat ${chat.id}: other user ID is ${otherUserId}`);
           if (userCache.current[otherUserId]) {
+            console.log(`[ChatList] Using cached profile for user ID: ${otherUserId}`);
             return { ...chat, otherUser: userCache.current[otherUserId] };
           } else {
+            console.log(`[ChatList] Fetching profile for user ID: ${otherUserId}`);
             const userSnap = await getDoc(doc(db, 'users', otherUserId));
             if (userSnap.exists()) {
               const userData = { id: userSnap.id, ...userSnap.data() } as UserProfile;
               userCache.current[otherUserId] = userData;
               return { ...chat, otherUser: userData };
+            } else {
+              console.log(`[ChatList] User profile NOT found for ID: ${otherUserId}`);
             }
           }
         }
@@ -53,6 +66,7 @@ const ChatList = memo(function ChatList({ activeChatId, setActiveChatId }: ChatL
       });
 
       const resolvedChats = (await Promise.all(chatPromises)).filter(Boolean) as (Chat & { otherUser?: UserProfile })[];
+      console.log(`[ChatList] Resolved ${resolvedChats.length} valid chats.`);
       
       // Sort by updatedAt descending
       resolvedChats.sort((a, b) => {
@@ -64,6 +78,7 @@ const ChatList = memo(function ChatList({ activeChatId, setActiveChatId }: ChatL
       setChats(resolvedChats);
       setLoading(false);
     }, (error) => {
+      console.error(`[ChatList] onSnapshot Error:`, error);
       handleFirestoreError(error, OperationType.LIST, 'chats');
     });
 

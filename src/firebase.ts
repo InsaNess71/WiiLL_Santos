@@ -9,7 +9,6 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore with long polling and memory cache to avoid assertion errors and persistence issues
 export const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
   localCache: memoryLocalCache()
 }, firebaseConfig.firestoreDatabaseId);
 

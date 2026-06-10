@@ -24,9 +24,9 @@ export default function NicknameModal({ onComplete }: NicknameModalProps) {
       return;
     }
 
-    const forbidden = /porno|sexo|puta|caralho|buceta|pau|cu|foda/i;
+    const forbidden = /porno|sexo|puta|caralho|buceta|pau|cu|foda|conselheiro|counselor/i;
     if (forbidden.test(trimmed)) {
-      setError('Este nickname contém palavras não permitidas.');
+      setError('Este nickname contém palavras não permitidas ou reservadas.');
       return;
     }
 

@@ -50,7 +50,7 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
       const reportsData: ReportData[] = [];
       
       for (const document of snap.docs) {
-        const report = { id: document.id, ...document.data() } as ReportData;
+        const report = { id: document.id, ...document.data({ serverTimestamps: 'estimate' }) } as ReportData;
         
         // Fetch confession details
         const confessionSnap = await getDoc(doc(db, 'confessions', report.confessionId));

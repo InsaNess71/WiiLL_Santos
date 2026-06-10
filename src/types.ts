@@ -11,7 +11,6 @@ export interface Confession {
   judgement?: { right: number, wrong: number };
   background?: string;
   isHidden?: boolean;
-  imageUrl?: string;
   createdAt: Timestamp | any; // Firestore Timestamp or FieldValue during creation
   authorId: string;
 }
@@ -23,7 +22,6 @@ export interface Comment {
   likes?: number;
   createdAt: Timestamp | any;
   authorId: string;
-  isAI?: boolean;
   isBest?: boolean;
 }
 

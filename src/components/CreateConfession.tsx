@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { CATEGORIES } from '../types';
 import { addDoc, collection, serverTimestamp, getDoc, doc } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { db, auth, storage, handleFirestoreError, OperationType } from '../firebase';
-import { Send, X, ShieldAlert, Camera, Crown, Trash2, Upload, Loader2 } from 'lucide-react';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { Send, X, ShieldAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { containsProfanity, filterProfanity } from '../lib/filter';
-import { moderateConfession } from '../services/geminiService';
 import { cn } from '../lib/utils';
 
 interface CreateConfessionProps {
@@ -19,11 +17,7 @@ export default function CreateConfession({ onClose }: CreateConfessionProps) {
   const [age, setAge] = useState('');
   const [gender, setGender] = useState('');
   const [background, setBackground] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const BACKGROUNDS = [
     { name: 'Padrão', value: '' },
@@ -39,7 +33,7 @@ export default function CreateConfession({ onClose }: CreateConfessionProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim() || !auth.currentUser || isUploading) return;
+    if (!text.trim() || !auth.currentUser) return;
 
     if (containsProfanity(text)) {
       setError('Sua confissão contém palavras impróprias. Por favor, revise o texto.');
@@ -50,18 +44,10 @@ export default function CreateConfession({ onClose }: CreateConfessionProps) {
     setError('');
 
     try {
-      // 1. AI Moderation Check
-      const moderation = await moderateConfession(text);
-      if (!moderation.isApproved) {
-        setError(`Confissão bloqueada pela moderação: ${moderation.reason || 'Viola as diretrizes de segurança.'}`);
-        setIsSubmitting(false);
-        return;
-      }
-
-      // 2. Filter profanity and save
+      // 1. Filter profanity and save
       const filteredText = filterProfanity(text.trim());
       
-      // 3. Check if user is shadow banned
+      // 2. Check if user is shadow banned
       const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
       const isShadowBanned = userDoc.exists() && userDoc.data().isShadowBanned === true;
       
@@ -72,7 +58,6 @@ export default function CreateConfession({ onClose }: CreateConfessionProps) {
         commentCount: 0,
         judgement: { right: 0, wrong: 0 },
         background,
-        imageUrl: imageUrl || '',
         isHidden: isShadowBanned,
         createdAt: serverTimestamp(),
         authorId: auth.currentUser.uid
@@ -87,75 +72,6 @@ export default function CreateConfession({ onClose }: CreateConfessionProps) {
       handleFirestoreError(err, OperationType.WRITE, 'confessions');
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !auth.currentUser) return;
-
-    if (!auth.currentUser) {
-      setError('Você precisa estar logado para enviar fotos.');
-      return;
-    }
-
-    // Check file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('A imagem deve ter no máximo 5MB.');
-      return;
-    }
-
-    setIsUploading(true);
-    setUploadProgress(0);
-    setError('');
-
-    try {
-      const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-      const storageRef = ref(storage, `confessions/${auth.currentUser.uid}/${fileName}`);
-      
-      console.log("Starting upload to:", storageRef.fullPath);
-      const uploadTask = uploadBytesResumable(storageRef, file);
-
-      uploadTask.on('state_changed', 
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setUploadProgress(progress);
-          console.log(`Upload progress: ${progress}%`);
-        }, 
-        (error) => {
-          console.error("Detailed upload error:", error);
-          let errorMessage = 'Erro ao enviar imagem.';
-          if (error.code === 'storage/unauthorized') {
-            errorMessage = 'Erro de permissão (403). Verifique se o Storage está ativado e as regras de segurança foram publicadas.';
-          } else if (error.code === 'storage/project-not-found') {
-            errorMessage = 'Projeto não encontrado. Verifique a configuração do Firebase.';
-          } else if (error.code === 'storage/quota-exceeded') {
-            errorMessage = 'Limite de armazenamento excedido.';
-          } else if (error.code === 'storage/retry-limit-exceeded') {
-            errorMessage = 'Tempo limite excedido. Verifique sua conexão.';
-          } else {
-            errorMessage = `Erro (${error.code}): ${error.message}`;
-          }
-          setError(errorMessage);
-          setIsUploading(false);
-        }, 
-        async () => {
-          try {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            setImageUrl(downloadURL);
-            setIsUploading(false);
-            setUploadProgress(100);
-          } catch (err: any) {
-            console.error("Error getting download URL:", err);
-            setError('Erro ao obter link da imagem: ' + err.message);
-            setIsUploading(false);
-          }
-        }
-      );
-    } catch (err: any) {
-      console.error("Error starting upload task:", err);
-      setError('Erro ao iniciar upload: ' + err.message);
-      setIsUploading(false);
     }
   };
 
@@ -252,67 +168,6 @@ export default function CreateConfession({ onClose }: CreateConfessionProps) {
                   {bg.name}
                 </button>
               ))}
-            </div>
-          </div>
-
-          <div className="pt-2">
-            <label className="block text-sm font-medium text-zinc-400 mb-2 flex items-center justify-between">
-              <span className="flex items-center space-x-1.5">
-                <Camera className="w-4 h-4" />
-                <span>Imagem</span>
-              </span>
-            </label>
-            
-            <div className="space-y-3">
-              <input 
-                type="file" 
-                ref={fileInputRef}
-                onChange={handleFileUpload}
-                accept="image/*"
-                className="hidden"
-              />
-              
-              {imageUrl ? (
-                <div className="relative rounded-xl overflow-hidden border border-zinc-800 bg-black aspect-video">
-                  <img src={imageUrl} alt="Preview" className="w-full h-full object-contain" />
-                  <button
-                    type="button"
-                    onClick={() => setImageUrl('')}
-                    className="absolute top-2 right-2 p-1.5 bg-black/60 text-white rounded-full hover:bg-red-500 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : isUploading ? (
-                <div className="w-full py-8 bg-zinc-950 border border-zinc-800 rounded-xl flex flex-col items-center justify-center space-y-3">
-                  <Loader2 className="w-6 h-6 text-pink-500 animate-spin" />
-                  <div className="w-1/2 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-pink-600 transition-all duration-300" 
-                      style={{ width: `${uploadProgress}%` }}
-                    />
-                  </div>
-                  <span className="text-xs text-zinc-500">Enviando imagem... {Math.round(uploadProgress)}%</span>
-                </div>
-              ) : (
-                <div className="flex space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex-1 py-3 bg-zinc-950 border border-zinc-800 rounded-lg flex items-center justify-center space-x-2 text-zinc-300 hover:bg-zinc-800 transition-colors"
-                  >
-                    <Upload className="w-4 h-4" />
-                    <span className="text-sm">Enviar do Aparelho</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setImageUrl('https://picsum.photos/seed/' + Math.random() + '/800/600')}
-                    className="px-4 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-medium transition-colors"
-                  >
-                    Aleatória
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 

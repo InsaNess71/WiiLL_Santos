@@ -84,19 +84,23 @@ export default function App() {
     // Check for rating prompt
     if (auth.currentUser) {
       const checkRating = async () => {
-        const hasRated = localStorage.getItem('confissoes_rated');
-        if (hasRated) return;
+        try {
+          const hasRated = localStorage.getItem('confissoes_rated');
+          if (hasRated) return;
 
-        const q = query(collection(db, 'confessions'), where('authorId', '==', auth.currentUser?.uid));
-        const snap = await getDocs(q);
-        if (snap.size >= 3) {
-          // Only show if they haven't seen it in the last 7 days
-          const lastPrompt = localStorage.getItem('confissoes_rating_prompt_last');
-          const now = Date.now();
-          if (!lastPrompt || now - parseInt(lastPrompt) > 7 * 24 * 60 * 60 * 1000) {
-            setShowRating(true);
-            localStorage.setItem('confissoes_rating_prompt_last', now.toString());
+          const q = query(collection(db, 'confessions'), where('authorId', '==', auth.currentUser?.uid));
+          const snap = await getDocs(q);
+          if (snap.size >= 3) {
+            // Only show if they haven't seen it in the last 7 days
+            const lastPrompt = localStorage.getItem('confissoes_rating_prompt_last');
+            const now = Date.now();
+            if (!lastPrompt || now - parseInt(lastPrompt) > 7 * 24 * 60 * 60 * 1000) {
+              setShowRating(true);
+              localStorage.setItem('confissoes_rating_prompt_last', now.toString());
+            }
           }
+        } catch (error) {
+          handleFirestoreError(error, OperationType.LIST, 'confessions');
         }
       };
       checkRating();
@@ -294,7 +298,7 @@ export default function App() {
           lastActive: serverTimestamp()
         });
       } catch (error) {
-        console.error("Error updating presence:", error);
+        handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
       }
     };
 
@@ -435,7 +439,7 @@ export default function App() {
 
       let data = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data({ serverTimestamps: 'estimate' })
       })) as Confession[];
 
       // Check if we have more items to load

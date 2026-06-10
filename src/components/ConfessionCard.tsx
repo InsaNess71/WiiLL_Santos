@@ -1,6 +1,6 @@
 import { useState, useEffect, memo, useRef, lazy, Suspense } from 'react';
 import { Confession, UserProfile, REPORT_REASONS } from '../types';
-import { Heart, MessageCircle, Share2, User, Trash2, AlertTriangle, Flag, ShieldCheck, Flame, Download, Crown } from 'lucide-react';
+import { Heart, MessageCircle, Share2, User, Trash2, AlertTriangle, Flag, ShieldCheck, Flame, Download } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -40,21 +40,25 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
     const checkInteractions = async () => {
       if (!auth.currentUser) return;
       
-      // Check like
-      const likeRef = doc(db, 'confessions', confession.id, 'likes', auth.currentUser.uid);
-      const likeSnap = await getDoc(likeRef);
-      setIsLiked(likeSnap.exists());
+      try {
+        // Check like
+        const likeRef = doc(db, 'confessions', confession.id, 'likes', auth.currentUser.uid);
+        const likeSnap = await getDoc(likeRef);
+        setIsLiked(likeSnap.exists());
 
-      // Check judgement
-      const judgementRef = doc(db, 'confessions', confession.id, 'judgements', auth.currentUser.uid);
-      const judgementSnap = await getDoc(judgementRef);
-      if (judgementSnap.exists()) {
-        setUserJudgement(judgementSnap.data().vote);
+        // Check judgement
+        const judgementRef = doc(db, 'confessions', confession.id, 'judgements', auth.currentUser.uid);
+        const judgementSnap = await getDoc(judgementRef);
+        if (judgementSnap.exists()) {
+          setUserJudgement(judgementSnap.data().vote);
+        }
+        
+        // Get current user profile for admin check
+        const profile = await getUserProfile(auth.currentUser.uid);
+        setCurrentUserProfile(profile);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.GET, `confessions/${confession.id}/interactions`);
       }
-      
-      // Get current user profile for admin check
-      const profile = await getUserProfile(auth.currentUser.uid);
-      setCurrentUserProfile(profile);
     };
     checkInteractions();
   }, [confession.id]);
@@ -132,7 +136,7 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
         }
       }
     } catch (error) {
-      console.error("Error toggling like:", error);
+      handleFirestoreError(error, OperationType.WRITE, `confessions/${confession.id}/likes`);
       setIsLiked(!isLiked); // Revert on error
     } finally {
       setLikeLoading(false);
@@ -167,7 +171,7 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
       await batch.commit();
       setUserJudgement(vote);
     } catch (error) {
-      console.error("Error voting:", error);
+      handleFirestoreError(error, OperationType.WRITE, `confessions/${confession.id}/judgements`);
       setUserJudgement(userJudgement); // Revert or handle error
     } finally {
       setJudgementLoading(false);
@@ -318,17 +322,6 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
         "{confession.text}"
       </p>
 
-      {confession.imageUrl && (
-        <div className="mb-6 rounded-xl overflow-hidden border border-zinc-800 bg-black/40">
-          <img 
-            src={confession.imageUrl} 
-            alt="Anexo da confissão" 
-            className="w-full h-auto max-h-[400px] object-contain mx-auto"
-            referrerPolicy="no-referrer"
-          />
-        </div>
-      )}
-
       <div className="bg-zinc-950/50 rounded-xl p-3 mb-4 border border-zinc-800/50">
         <p className="text-xs text-zinc-400 font-medium mb-2 text-center uppercase tracking-wider">Você acha isso:</p>
         <div className="flex items-center justify-center space-x-3">
@@ -385,10 +378,14 @@ const ConfessionCard = memo(function ConfessionCard({ confession }: ConfessionCa
           
           <button 
             onClick={() => setShowComments(!showComments)}
-            className="flex items-center space-x-1.5 text-sm text-zinc-400 hover:text-blue-400 transition-colors"
+            className={cn(
+              "flex items-center space-x-1.5 text-sm transition-colors",
+              showComments ? "text-pink-400" : "text-zinc-400 hover:text-pink-400"
+            )}
           >
             <MessageCircle className="w-5 h-5" />
-            <span>{confession.commentCount}</span>
+            <span className="font-medium">Comentários</span>
+            <span className="bg-zinc-800 px-1.5 py-0.5 rounded text-[10px]">{confession.commentCount}</span>
           </button>
         </div>
 
