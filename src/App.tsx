@@ -353,7 +353,7 @@ export default function App() {
         if ('Notification' in window && Notification.permission === 'granted') {
           new Notification('Nova mensagem', {
             body: notifyMessage,
-            icon: '/icon-192x192.png'
+            icon: '/icon-192.png'
           });
         }
       }

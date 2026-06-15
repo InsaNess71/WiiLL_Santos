@@ -20,8 +20,8 @@ messaging.onBackgroundMessage((payload) => {
   const notificationTitle = payload.notification?.title || 'Nova Notificação';
   const notificationOptions = {
     body: payload.notification?.body || 'Você tem uma nova mensagem.',
-    icon: '/icon-192x192.png',
-    badge: '/icon-192x192.png',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
     data: payload.data
   };
 

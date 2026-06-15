@@ -75,8 +75,8 @@ async function sendNotification(userId: string, title: string, body: string, dat
       },
       webpush: {
         notification: {
-          icon: "/icon-192x192.png",
-          badge: "/icon-192x192.png",
+          icon: "/icon-192.png",
+          badge: "/icon-192.png",
           vibrate: [200, 100, 200],
         },
         fcmOptions: {
