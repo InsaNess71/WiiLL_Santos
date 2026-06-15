@@ -15,46 +15,24 @@ export default defineConfig(({mode}) => {
         manifestFilename: 'manifest.json',
         includeAssets: ['icon-192.png', 'icon-512.png'],
         manifest: {
-          id: '/?source=pwa',
           name: 'Confissões Anônimas',
           short_name: 'Confissões',
-          description: 'Um espaço seguro para desabafar, contar segredos e histórias sem revelar sua identidade. Interaja, comente e julgue anonimamente.',
-          theme_color: '#09090b',
-          background_color: '#09090b',
+          start_url: '/',
           display: 'standalone',
-          display_override: ['window-controls-overlay', 'standalone', 'minimal-ui'],
-          orientation: 'portrait-primary',
-          dir: 'ltr',
-          lang: 'pt-BR',
-          categories: ['social', 'entertainment', 'lifestyle'],
-          start_url: '/?source=pwa',
+          background_color: '#09090b',
+          theme_color: '#09090b',
           icons: [
             {
               src: '/icon-192.png',
               sizes: '192x192',
-              type: 'image/png',
-              purpose: 'any'
-            },
-            {
-              src: '/icon-192.png',
-              sizes: '192x192',
-              type: 'image/png',
-              purpose: 'maskable'
+              type: 'image/png'
             },
             {
               src: '/icon-512.png',
               sizes: '512x512',
-              type: 'image/png',
-              purpose: 'any'
-            },
-            {
-              src: '/icon-512.png',
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'maskable'
+              type: 'image/png'
             }
-          ],
-          shortcuts: []
+          ]
         },
         workbox: {
           navigateFallbackDenylist: [/^\/api/],
