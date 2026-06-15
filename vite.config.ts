@@ -13,7 +13,7 @@ export default defineConfig(({mode}) => {
       VitePWA({
         registerType: 'autoUpdate',
         manifestFilename: 'manifest.json',
-        includeAssets: ['icon-192.png', 'icon-512.png'],
+        includeAssets: ['icon-192.png', 'icon-512.png', 'icon-192x192.png', 'icon-512x512.png'],
         manifest: {
           id: '/?source=pwa',
           name: 'Confissões Anônimas',
