@@ -54,22 +54,7 @@ export default defineConfig(({mode}) => {
               purpose: 'maskable'
             }
           ],
-          shortcuts: [
-            {
-              name: 'Nova Confissão',
-              short_name: 'Postar',
-              description: 'Escreva uma nova confissão anônima',
-              url: '/?action=post',
-              icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }]
-            },
-            {
-              name: 'Em Alta',
-              short_name: 'Em Alta',
-              description: 'Veja as confissões mais populares',
-              url: '/?tab=trending',
-              icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }]
-            }
-          ]
+          shortcuts: []
         },
         workbox: {
           navigateFallbackDenylist: [/^\/api/],
