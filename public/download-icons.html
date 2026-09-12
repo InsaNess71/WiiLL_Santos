@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Download dos Ícones PWA - Confissões Anônimas</title>
+  <style>
+    body {
+      background-color: #09090b;
+      color: #f4f4f5;
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+    h1 { color: #f43f5e; margin-bottom: 8px; }
+    p { color: #a1a1aa; margin-bottom: 32px; }
+    .card-container {
+      display: flex;
+      gap: 32px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .card {
+      background-color: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    img {
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    a.download-btn {
+      background-color: #e11d48;
+      color: white;
+      text-decoration: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: background-color 0.2s;
+    }
+    a.download-btn:hover {
+      background-color: #be123c;
+    }
+  </style>
+</head>
+<body>
+  <h1>Ícones Oficiais do PWA</h1>
+  <p>Clique nos botões abaixo para baixar os arquivos PNG diretamente.</p>
+
+  <div class="card-container">
+    <div class="card">
+      <h3 style="margin:0;">icon-192.png (192x192)</h3>
+      <img src="/icon-192.png" width="192" height="192" alt="Ícone 192x192">
+      <a href="/icon-192.png" download="icon-192.png" class="download-btn">Baixar icon-192.png</a>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0;">icon-512.png (512x512)</h3>
+      <img src="/icon-512.png" width="256" height="256" alt="Ícone 512x512">
+      <a href="/icon-512.png" download="icon-512.png" class="download-btn">Baixar icon-512.png</a>
+    </div>
+  </div>
+</body>
+</html>
