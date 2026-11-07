@@ -64,6 +64,12 @@ export default defineConfig(({ mode }) => {
           ]
         }
       })
+              urlPattern: /^\/api\/.*$/,
+              handler: 'NetworkOnly',
+            }
+          ]
+        }
+      })
     ],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || ''),
