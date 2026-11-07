@@ -63,11 +63,6 @@ export default defineConfig(({ mode }) => {
             }
           ]
         }
-      }             urlPattern: /^\/api\/.*$/,
-              handler: 'NetworkOnly',
-            }
-          ]
-        }
       })
     ],
     define: {
@@ -82,11 +77,9 @@ export default defineConfig(({ mode }) => {
       hmr: process.env.DISABLE_HMR !== 'true',
     },
     build: {
-      // Eleva o limite do aviso para 1000 kB
       chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
-          // Separa as dependências do node_modules em um arquivo próprio
           manualChunks(id) {
             if (id.includes('node_modules')) {
               return 'vendor';
