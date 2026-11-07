@@ -63,8 +63,7 @@ export default defineConfig(({ mode }) => {
             }
           ]
         }
-      })
-              urlPattern: /^\/api\/.*$/,
+      }             urlPattern: /^\/api\/.*$/,
               handler: 'NetworkOnly',
             }
           ]
